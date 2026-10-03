@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: System packages (ffmpeg, and the GL/EGL libraries skia links against)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libgl1 libegl1
+      - name: Install
+        run: pip install -e .
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Render the example (draft)
+        run: reelsmith render examples/carousel-crafter.json --draft --no-llm --duration 12 -o /tmp/out

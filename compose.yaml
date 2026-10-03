@@ -1,0 +1,58 @@
+# docker compose up -d            → http://localhost:5179
+# docker compose --profile ollama up -d   → also runs Ollama in a container (see README)
+# docker compose --profile kokoro up -d   → also runs Kokoro text-to-speech for voice-overs
+name: reelsmith
+
+services:
+  reelsmith:
+    build: .
+    image: reelsmith:latest
+    restart: unless-stopped
+    environment:
+      REELSMITH_PORT: ${REELSMITH_PORT:-5179}
+      # local-model presets (Ollama, vLLM, LM Studio) point at the machine running Docker, not the container
+      REELSMITH_LOCAL_HOST: ${REELSMITH_LOCAL_HOST:-host.docker.internal}
+      # with the ollama profile, set this to http://ollama:11434 in .env
+      REELSMITH_OLLAMA_URL: ${REELSMITH_OLLAMA_URL:-}
+      # with the kokoro profile, set this to http://kokoro:8880/v1 in .env
+      REELSMITH_TTS_URL: ${REELSMITH_TTS_URL:-}
+      # extra names the app may be reached by, e.g. "reels.example.com,192.168.1.20:5179" (comma separated)
+      REELSMITH_ALLOWED_HOSTS: ${REELSMITH_ALLOWED_HOSTS:-}
+      # optional: higher GitHub rate limit + repo stats
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # optional: configure the LLM from the environment instead of the Settings page
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      REELSMITH_MODEL: ${REELSMITH_MODEL:-}
+    ports:
+      # loopback only: the app has no login. Same number on both sides (see Dockerfile CMD).
+      - "${REELSMITH_BIND:-127.0.0.1}:${REELSMITH_PORT:-5179}:${REELSMITH_PORT:-5179}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # makes the name work on Linux too
+    volumes:
+      - reelsmith-data:/data
+    # rendering uses every core it's given; cap it if the machine is shared
+    # cpus: "4"
+    # mem_limit: 4g
+
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    # GPU (NVIDIA + nvidia-container-toolkit): uncomment
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  kokoro:
+    profiles: ["kokoro"]
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest     # NVIDIA GPU: ghcr.io/remsky/kokoro-fastapi-gpu:latest + the deploy block
+    restart: unless-stopped
+
+volumes:
+  reelsmith-data:
+  ollama-models:

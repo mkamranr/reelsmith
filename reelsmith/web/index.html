@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reelsmith</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22 width=%22512%22 height=%22512%22%3E%3Cdefs%3E%3ClinearGradient id=%22amber%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22#FFD166%22/%3E%3Cstop offset=%220.55%22 stop-color=%22#F0B429%22/%3E%3Cstop offset=%221%22 stop-color=%22#E0861A%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22slate%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22#26354A%22/%3E%3Cstop offset=%221%22 stop-color=%22#172231%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22glow%22 cx=%220.3%22 cy=%220.25%22 r=%220.75%22%3E%3Cstop offset=%220%22 stop-color=%22#F0B429%22 stop-opacity=%220.22%22/%3E%3Cstop offset=%221%22 stop-color=%22#F0B429%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 rx=%22116%22 fill=%22#0B1018%22/%3E%3Crect width=%22512%22 height=%22512%22 rx=%22116%22 fill=%22url%28#glow%29%22/%3E%3Crect x=%22226%22 y=%22104%22 width=%22168%22 height=%22298%22 rx=%2230%22 fill=%22url%28#slate%29%22 transform=%22rotate%2811 310 253%29%22/%3E%3Crect x=%22138%22 y=%22112%22 width=%22176%22 height=%22312%22 rx=%2232%22 fill=%22url%28#amber%29%22 transform=%22rotate%28-7 226 268%29%22/%3E%3Cpath d=%22M196 216 L196 312 L274 264 Z%22 fill=%22#0B1018%22 stroke=%22#0B1018%22 stroke-width=%2214%22 stroke-linejoin=%22round%22 transform=%22rotate%28-7 226 268%29%22/%3E%3Cpath d=%22M398 74 C402 106 410 114 442 118 C410 122 402 130 398 162 C394 130 386 122 354 118 C386 114 394 106 398 74 Z%22 fill=%22#FFE29A%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E6E9ED; --panel: #FFFFFF; --ink: #15181D; --ink-2: #4B5360; --ink-3: #7C8594;
+    --line: #CDD3DB; --well: #F3F5F7; --accent: #F0B429; --accent-ink: #15181D; --bad: #C2362F; --ok: #1E8A4C;
+    --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  header { display: flex; align-items: baseline; gap: 18px; padding: 22px 32px 0; flex-wrap: wrap; }
+  .brand { font: 800 30px/1 var(--display); letter-spacing: -0.02em; margin: 0; }
+  .brand span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: var(--accent); margin-left: 4px; transition: background .2s; }
+  .llm { color: var(--ink-2); font-size: 14px; }
+  .llm b { font-weight: 600; color: var(--ink); }
+
+  main { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 28px; padding: 22px 32px 48px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 18px 16px 0; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  h2 { font: 700 22px/1.2 var(--display); margin: 0 0 4px; letter-spacing: -0.01em; }
+  .hint { color: var(--ink-3); font-size: 14px; margin: 0 0 16px; }
+
+  label { display: block; font-weight: 600; font-size: 14px; margin: 16px 0 6px; }
+  label small { font-weight: 400; color: var(--ink-3); }
+  input[type=text], input[type=url], input[type=password], textarea { width: 100%; border: 1px solid var(--line); background: var(--well); border-radius: 9px; padding: 10px 12px; }
+  textarea { resize: vertical; min-height: 84px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--ink); background: #fff; }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .row > * { flex: 1; }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+  .len { font: 700 28px/1 var(--display); min-width: 64px; text-align: right; flex: 0 0 auto; }
+  .len small { font: 500 14px var(--body); color: var(--ink-3); }
+  .swatch { display: flex; gap: 8px; align-items: center; }
+  .swatch input[type=color] { width: 44px; height: 40px; border: 1px solid var(--line); border-radius: 9px; padding: 3px; background: var(--well); flex: 0 0 auto; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: var(--well); padding: 9px 10px; cursor: pointer; font-size: 14px; }
+  .seg button[aria-pressed=true] { background: var(--ink); color: #fff; }
+  fieldset.upscale { border: 0; padding: 0; margin: 0; min-width: 0; }
+  fieldset.upscale:disabled { opacity: .5; }
+  fieldset.upscale:disabled button { cursor: not-allowed; }
+  label.check { display: flex; gap: 8px; align-items: baseline; font-weight: 500; flex-wrap: wrap; margin-top: 12px; }
+  label.check small { color: var(--ink-3); font-weight: 400; flex-basis: 100%; padding-left: 24px; }
+  .actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--ink); background: transparent; border-radius: 10px; padding: 11px 16px; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); flex: 1; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .err { color: var(--bad); font-size: 14px; margin-top: 12px; min-height: 1em; white-space: pre-wrap; }
+
+  /* stage: the preview frame is the one bold thing on the page */
+  .stage { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 1200px) { .stage { grid-template-columns: 1fr; } }
+  .frame { width: min(360px, 86vw); aspect-ratio: 9/16; border-radius: 34px; background: #0A0E14; border: 10px solid var(--ink);
+           box-shadow: 0 30px 60px -30px rgba(21,24,29,.55); overflow: hidden; position: relative; display: grid; place-items: center; }
+  .frame video, .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .frame .empty { color: #8093A6; text-align: center; padding: 30px; font-size: 15px; }
+  .frame .empty strong { display: block; color: #F4F7FA; font: 700 24px/1.2 var(--display); margin-bottom: 8px; }
+  .tabs-mini { display: flex; gap: 6px; margin-top: 12px; width: min(360px, 86vw); }
+  .tabs-mini button { flex: 1; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px; cursor: pointer; font-size: 14px; }
+  .tabs-mini button[aria-pressed=true] { border-color: var(--ink); font-weight: 600; }
+
+  .strip { display: flex; height: 54px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--well); margin: 8px 0 6px; }
+  .strip div { border-right: 2px solid var(--panel); padding: 6px 8px; font-size: 12px; line-height: 1.2; overflow: hidden; white-space: nowrap; background: var(--well); position: relative; }
+  .strip div:last-child { border-right: 0; }
+  .strip div b { display: block; font: 600 13px var(--body); text-transform: capitalize; }
+  .strip div span { color: var(--ink-3); }
+  .strip div.done { background: color-mix(in srgb, var(--accent) 35%, white); }
+  .strip div.now { background: var(--accent); }
+  .timecode { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 12px; }
+
+  .status { margin-top: 18px; }
+  .status .what { font-weight: 600; }
+  .bar { height: 6px; background: var(--well); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--ink); transition: width .4s; }
+  details { margin-top: 10px; color: var(--ink-2); font-size: 13px; }
+  details pre { white-space: pre-wrap; font: 12px/1.5 var(--code); background: var(--well); padding: 10px; border-radius: 8px; max-height: 220px; overflow: auto; }
+
+  .downloads { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .downloads a { text-decoration: none; color: var(--ink); border: 1px solid var(--ink); border-radius: 9px; padding: 8px 12px; font-weight: 600; font-size: 14px; }
+
+  .caps { display: grid; gap: 14px; margin-top: 22px; }
+  .cap { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--panel); }
+  .cap header { padding: 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cap h3 { font: 700 17px var(--display); margin: 0; }
+  .cap pre { white-space: pre-wrap; font: 14px/1.55 var(--body); margin: 0; max-height: 260px; overflow: auto; }
+  .copy { border: 1px solid var(--line); background: var(--well); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+
+  .sb { margin-top: 18px; }
+  .sb textarea { font: 12.5px/1.5 var(--code); min-height: 300px; background: var(--well); }
+  .history { margin-top: 18px; }
+  .history ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  .history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .history a { color: var(--ink); }
+  .history span { color: var(--ink-3); }
+  .hdr-btn { margin-left: auto; border: 1px solid var(--ink); background: var(--panel); border-radius: 10px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+  dialog { border: 1px solid var(--line); border-radius: 16px; padding: 0; width: min(640px, 94vw); max-height: 92vh; background: var(--panel); color: var(--ink); }
+  dialog::backdrop { background: rgba(21,24,29,.45); }
+  .dlg { padding: 24px; overflow: auto; max-height: 92vh; }
+  .dlg h2 { font-size: 26px; }
+  .providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+  .prov { text-align: left; border: 1px solid var(--line); background: var(--well); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .prov b { display: block; font: 600 15px var(--body); }
+  .prov span { font-size: 12.5px; color: var(--ink-3); }
+  .prov[aria-checked=true] { border-color: var(--ink); background: var(--panel); box-shadow: inset 0 0 0 1px var(--ink); }
+  .prov-help { font-size: 14px; color: var(--ink-2); margin: 12px 0 0; }
+  .prov-help code, .note code { font: 13px var(--code); background: var(--well); padding: 1px 5px; border-radius: 4px; }
+  .model-row { display: flex; gap: 8px; }
+  .model-row input { flex: 1; }
+  .model-row button { flex: 0 0 auto; }
+  .note { font-size: 13.5px; color: var(--ink-2); background: var(--well); border-radius: 10px; padding: 10px 12px; margin-top: 16px; }
+  .result { font-size: 14px; margin-top: 14px; padding: 10px 12px; border-radius: 10px; display: none; white-space: pre-wrap; }
+  .result.ok { display: block; background: color-mix(in srgb, var(--ok) 12%, white); color: #134d2c; }
+  .result.bad { display: block; background: color-mix(in srgb, var(--bad) 10%, white); color: #7a1f1a; }
+  .adv { margin-top: 16px; }
+  .adv summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .grid2 input[type=number] { width: 100%; border: 1px solid var(--line); background: var(--well); border-radius: 9px; padding: 9px 12px; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+  .dlg-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .dlg-actions .spacer { flex: 1; }
+  .link-btn { border: 0; background: none; color: var(--bad); cursor: pointer; padding: 11px 4px; font-weight: 600; }
+  .tpl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .tpl { border: 1px solid var(--line); background: var(--well); border-radius: 11px; padding: 6px 6px 8px; text-align: left; cursor: pointer; display: grid; gap: 6px; align-content: start; }
+  .tpl img { width: 100%; aspect-ratio: 9 / 16; border-radius: 7px; display: block; background: var(--line); object-fit: cover; }
+  .tpl b { font-size: 13.5px; line-height: 1.2; }
+  .tpl span { font-size: 11.5px; line-height: 1.3; color: var(--ink-3); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .tpl[aria-checked=true] { border-color: var(--ink); background: var(--panel); box-shadow: inset 0 0 0 1px var(--ink); }
+  .tpl:hover img { filter: brightness(1.04); }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 18px; }
+  .tabs button { border: 0; background: none; padding: 10px 14px; font-weight: 600; color: var(--ink-3); border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; }
+  .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--ink); }
+  select { width: 100%; border: 1px solid var(--line); background: var(--well); border-radius: 9px; padding: 9px 10px; }
+  #v-audio { width: 100%; margin-top: 10px; }
+  .vo { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .vo .link-btn { color: var(--ink); text-decoration: underline; padding: 0; }
+  .jobs { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .jobs-head { display: flex; align-items: baseline; gap: 10px; }
+  .jobs-head span { color: var(--ink-3); font-size: 14px; }
+  .jobs-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+  .job-row { width: 100%; text-align: left; display: grid; grid-template-columns: 10px 1fr auto; gap: 4px 10px; align-items: center;
+             border: 1px solid var(--line); background: var(--well); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+  .job-row[aria-current=true] { border-color: var(--ink); background: var(--panel); box-shadow: inset 0 0 0 1px var(--ink); }
+  .job-row .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+  .job-row .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job-row .when { font-size: 12.5px; color: var(--ink-3); }
+  .job-row .m { grid-column: 2 / 4; font-size: 13px; color: var(--ink-2); }
+  .job-row .mini { grid-column: 2 / 4; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .job-row .mini i { display: block; height: 100%; background: var(--ink); }
+  .st-running .dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .st-queued .dot { background: transparent; border: 2px solid var(--ink-3); width: 6px; height: 6px; }
+  .st-done .dot { background: var(--ok); }
+  .st-error .dot, .st-interrupted .dot { background: var(--bad); }
+  .st-cancelled .dot { background: var(--line); }
+  .job-head { margin-bottom: 14px; }
+  .job-head h2 { margin-bottom: 2px; overflow-wrap: anywhere; }
+  .job-head p { margin: 0; color: var(--ink-3); font-size: 14px; }
+  .job-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .job-actions .btn { padding: 8px 12px; font-size: 14px; }
+  .job-actions .danger { border-color: var(--bad); color: var(--bad); }
+  .confirm { font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .joberr { color: var(--bad); white-space: pre-wrap; font-size: 14px; margin-top: 10px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Reelsmith<span aria-hidden="true"></span></h1>
+  <div class="llm" id="llm">Checking planner…</div>
+  <button class="hdr-btn" id="open-settings" type="button">Settings</button>
+</header>
+
+<dialog id="settings" aria-labelledby="set-h">
+  <div class="dlg">
+    <div class="tabs" role="tablist" aria-label="Settings">
+      <button type="button" role="tab" id="tab-llm" aria-controls="pane-llm" aria-selected="true">Language model</button>
+      <button type="button" role="tab" id="tab-voice" aria-controls="pane-voice" aria-selected="false">Voice</button>
+    </div>
+    <div id="pane-llm" role="tabpanel" aria-labelledby="tab-llm">
+    <h2 id="set-h">Language model</h2>
+    <p class="hint">Writes the storyboard and captions. Without one, Reelsmith uses its built-in planner.</p>
+
+    <div class="providers" id="providers" role="radiogroup" aria-label="Provider"></div>
+    <p class="prov-help" id="prov-help"></p>
+
+    <div id="prov-fields">
+      <label for="c-base">Endpoint URL</label>
+      <input id="c-base" type="url" spellcheck="false">
+      <p class="note" id="c-dock" hidden></p>
+
+      <label for="c-key">API key <small id="key-hint"></small></label>
+      <input id="c-key" type="password" autocomplete="off" spellcheck="false">
+
+      <label for="c-model">Model</label>
+      <div class="model-row">
+        <input id="c-model" type="text" list="model-list" spellcheck="false" placeholder="Model name">
+        <datalist id="model-list"></datalist>
+        <button class="btn" id="find-models" type="button">Find models</button>
+      </div>
+
+      <details class="adv">
+        <summary>Advanced</summary>
+        <div class="grid2">
+          <div><label for="c-temp">Temperature</label><input id="c-temp" type="number" step="0.1" min="0" max="2"></div>
+          <div><label for="c-max">Max output tokens</label><input id="c-max" type="number" step="256" min="256" max="32000"></div>
+          <div><label for="c-timeout">Timeout <small>seconds</small></label><input id="c-timeout" type="number" step="10" min="10" max="3600"></div>
+          <div><label for="c-src">Source text budget <small>characters</small></label><input id="c-src" type="number" step="500" min="1000" max="60000"></div>
+          <div id="ctx-wrap"><label for="c-ctx">Context window <small>Ollama num_ctx</small></label><input id="c-ctx" type="number" step="1024" min="2048" max="262144"></div>
+        </div>
+        <label class="check"><input id="c-json" type="checkbox"> Ask for JSON output <small>(turn off if your server rejects it)</small></label>
+        <label for="c-headers">Extra headers <small>one per line, <code>Name: value</code></small></label>
+        <textarea id="c-headers" spellcheck="false" style="min-height:60px;font:13px var(--code)"></textarea>
+      </details>
+      <div class="note" id="privacy"></div>
+    </div>
+
+    <div class="result" id="test-result" role="status"></div>
+    <div class="dlg-actions">
+      <button class="btn" id="test-btn" type="button">Test connection</button>
+      <button class="link-btn" id="clear-btn" type="button">Disconnect</button>
+      <span class="spacer"></span>
+      <button class="btn" id="cancel-btn" type="button">Cancel</button>
+      <button class="btn primary" id="save-btn" type="button" style="flex:0 0 auto">Save</button>
+    </div>
+    <p class="hint" style="margin:12px 0 0" id="cfg-path"></p>
+    </div>
+
+    <div id="pane-voice" role="tabpanel" aria-labelledby="tab-voice" hidden>
+      <h2>Voice-over</h2>
+      <p class="hint">Speaks the narration the language model writes for each video. Works with Kokoro, OpenAI, or any server that offers OpenAI's <code>/audio/speech</code> API.</p>
+      <div class="providers" id="v-providers" role="radiogroup" aria-label="Voice provider"></div>
+      <p class="prov-help" id="v-help"></p>
+      <div id="v-fields">
+        <label for="v-base">Endpoint URL <small>the part before <code>/audio/speech</code></small></label>
+        <input id="v-base" type="url" spellcheck="false">
+        <p class="note" id="v-dock" hidden></p>
+        <label for="v-key">API key <small id="v-key-hint"></small></label>
+        <input id="v-key" type="password" autocomplete="off" spellcheck="false">
+        <div class="grid2">
+          <div><label for="v-model">Model</label><input id="v-model" type="text" spellcheck="false"></div>
+          <div><label for="v-voice">Default voice</label>
+            <div class="model-row"><input id="v-voice" type="text" list="v-voice-list" spellcheck="false"><datalist id="v-voice-list"></datalist>
+              <button class="btn" id="v-find" type="button">Load voices</button></div></div>
+        </div>
+        <label for="v-speed">Speaking speed <small id="v-speed-v">1.00×</small></label>
+        <input id="v-speed" type="range" min="0.7" max="1.5" step="0.05" value="1">
+        <details class="adv">
+          <summary>Advanced</summary>
+          <div class="grid2">
+            <div><label for="v-format">Audio format <small>requested from the server</small></label>
+              <select id="v-format"><option value="wav">wav</option><option value="mp3">mp3</option><option value="flac">flac</option><option value="opus">opus</option><option value="pcm">pcm (24 kHz)</option></select></div>
+            <div><label for="v-timeout">Timeout <small>seconds per line</small></label><input id="v-timeout" type="number" step="10" min="10" max="1800"></div>
+          </div>
+          <label for="v-headers">Extra headers <small>one per line, <code>Name: value</code></small></label>
+          <textarea id="v-headers" spellcheck="false" style="min-height:60px;font:13px var(--code)"></textarea>
+        </details>
+      </div>
+      <div class="result" id="v-result" role="status"></div>
+      <audio id="v-audio" controls hidden></audio>
+      <div class="dlg-actions">
+        <button class="btn" id="v-test" type="button">Play a sample</button>
+        <button class="link-btn" id="v-clear" type="button">Turn off</button>
+        <span class="spacer"></span>
+        <button class="btn" id="v-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="v-save" type="button" style="flex:0 0 auto">Save</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<main>
+  <section class="panel" aria-labelledby="brief-h">
+    <h2 id="brief-h">Brief</h2>
+    <p class="hint">Fill in any of the first three. A link gives the planner the most to work with.</p>
+
+    <label for="topic">Topic or angle <small>what should viewers take away?</small></label>
+    <input id="topic" type="text" placeholder="Stop designing carousels by hand">
+
+    <label for="description">Description <small>optional</small></label>
+    <textarea id="description" placeholder="What it is, who it's for, what makes it different."></textarea>
+
+    <label for="url">Link <small>GitHub repo, Hugging Face model, or any page</small></label>
+    <input id="url" type="url" placeholder="https://github.com/owner/repo">
+
+    <label id="tpl-l">Template <small id="tpl-hint">look, motion, music and tone</small></label>
+    <div class="tpl-grid" id="tpl-grid" role="radiogroup" aria-labelledby="tpl-l"></div>
+
+    <label for="duration">Length</label>
+    <div class="row"><input id="duration" type="range" min="15" max="90" step="5" value="45"><div class="len"><span id="dur-v">45</span><small>s</small></div></div>
+
+    <div class="row" style="align-items:start">
+      <div>
+        <label for="accent-hex">Accent colour</label>
+        <div class="swatch"><input id="accent" type="color" value="#f0b429" aria-label="Pick accent colour"><input id="accent-hex" type="text" value="" placeholder="Template default"></div>
+      </div>
+      <div>
+        <label for="handle">Your handle</label>
+        <input id="handle" type="text" placeholder="@yourhandle">
+      </div>
+    </div>
+
+    <label id="q-l">Quality</label>
+    <div class="seg" id="q-seg" role="group" aria-labelledby="q-l">
+      <button type="button" data-q="draft" aria-pressed="true">Draft preview, 540p</button>
+      <button type="button" data-q="final" aria-pressed="false">Full 1080 × 1920</button>
+    </div>
+
+    <fieldset class="upscale" id="up-box" disabled>
+      <label id="u-l">Also export at <small id="u-hint">pick Full quality first</small></label>
+      <div class="seg" id="u-seg" role="group" aria-labelledby="u-l">
+        <button type="button" data-u="" aria-pressed="true">1080p only</button>
+        <button type="button" data-u="2k" aria-pressed="false">2K, 1440 × 2560</button>
+        <button type="button" data-u="4k" aria-pressed="false">4K, 2160 × 3840</button>
+      </div>
+      <label class="check"><input type="checkbox" id="u-native"> Render natively instead of upscaling
+        <small>sharpest result, about 2× (2K) or 4× (4K) longer</small></label>
+    </fieldset>
+
+    <div class="vo" id="vo-box">
+      <label class="check"><input type="checkbox" id="vo" disabled> Add a voice-over
+        <small id="vo-hint">Checking voice settings…</small></label>
+      <div id="vo-opts" hidden>
+        <label for="vo-voice">Voice <small>empty uses the default from Settings</small></label>
+        <input id="vo-voice" type="text" list="vo-voice-list" spellcheck="false" placeholder="Default voice">
+        <datalist id="vo-voice-list"></datalist>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="plan-btn" type="button">Plan storyboard</button>
+      <button class="btn primary" id="make-btn" type="button">Make video</button>
+    </div>
+    <div class="err" id="err" role="alert"></div>
+
+    <div class="sb" id="sb-wrap" hidden>
+      <h2>Storyboard</h2>
+      <p class="hint">Edit any text, reorder scenes or change the accent, then render. The engine fits text and timing for you.</p>
+      <textarea id="sb" spellcheck="false" aria-label="Storyboard JSON"></textarea>
+      <div class="actions"><button class="btn primary" id="render-btn" type="button">Render this storyboard</button></div>
+    </div>
+
+    <div class="jobs" id="jobs-wrap" hidden>
+      <div class="jobs-head"><h2>Jobs</h2><span id="jobs-count"></span></div>
+      <ul class="jobs-list" id="jobs"></ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="out-h">
+    <h2 id="out-h" class="visually-hidden" style="position:absolute;left:-9999px">Output</h2>
+    <div class="stage">
+      <div>
+        <div class="frame" id="frame"><div class="empty"><strong>Your video plays here</strong>Fill in the brief, then make a video. Drafts take about a minute.</div></div>
+        <div class="tabs-mini" id="view-tabs" hidden>
+          <button type="button" data-v="video" aria-pressed="true">Video</button>
+          <button type="button" data-v="cover" aria-pressed="false">Cover</button>
+        </div>
+      </div>
+      <div>
+        <div class="job-head" id="job-head" hidden>
+          <h2 id="job-title"></h2>
+          <p id="job-meta"></p>
+          <div class="job-actions" id="job-actions">
+            <button class="btn" id="job-cancel" type="button">Cancel</button>
+            <button class="btn" id="job-retry" type="button">Run again</button>
+            <button class="btn danger" id="job-delete" type="button">Delete</button>
+            <span class="confirm" id="job-confirm" hidden>Delete this job?
+              <button class="btn" id="del-keep" type="button">Keep the files</button>
+              <button class="btn danger" id="del-files" type="button">Delete files too</button>
+              <button class="link-btn" id="del-no" type="button" style="color:var(--ink)">Never mind</button></span>
+          </div>
+          <div class="joberr" id="job-err" hidden></div>
+        </div>
+        <div id="plan-view" hidden>
+          <h2>Timeline</h2>
+          <div class="strip" id="strip"></div>
+          <div class="timecode"><span>0s</span><span id="tc-end"></span></div>
+        </div>
+        <div class="status" id="status" hidden>
+          <div class="what" id="what"></div>
+          <div class="bar"><i id="bar"></i></div>
+          <details><summary>Details</summary><pre id="log"></pre></details>
+        </div>
+        <div class="downloads" id="downloads" hidden></div>
+        <div class="caps" id="caps"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let template = 'midnight', templates = [], quality = 'draft', upscale = '', polling = null, current = null, openId = null, jobsTimer = null, voiceReady = false, lastDetail = '';
+
+const STAGES = { starting: 'Starting', narration: 'Writing and recording the voice-over', cancelled: 'Cancelled', interrupted: 'Interrupted', error: 'Failed', queued: 'Waiting to start', reading: 'Reading the link', planning: 'Planning the storyboard', audio: 'Synthesizing sound',
+  rendering: 'Rendering frames', encode: 'Encoding video', upscale: 'Upscaling with ffmpeg', cover: 'Making the cover', captions: 'Writing captions', done: 'Done' };
+
+function setAccent(hex) {
+  if (!/^#?[0-9a-f]{6}$/i.test(hex)) return;
+  hex = '#' + hex.replace('#', '');
+  document.documentElement.style.setProperty('--accent', hex);
+  const n = parseInt(hex.slice(1), 16), l = 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+  document.documentElement.style.setProperty('--accent-ink', l > 140 ? '#15181D' : '#FFFFFF');
+}
+$('accent').addEventListener('input', e => { $('accent-hex').value = e.target.value.toUpperCase(); setAccent(e.target.value); });
+$('accent-hex').addEventListener('input', e => { if (/^#?[0-9a-f]{6}$/i.test(e.target.value)) { $('accent').value = '#' + e.target.value.replace('#', '').toLowerCase(); setAccent(e.target.value); } });
+$('duration').addEventListener('input', e => $('dur-v').textContent = e.target.value);
+function syncUpscale() {
+  const off = quality === 'draft';
+  $('up-box').disabled = off;
+  $('u-hint').textContent = off ? 'pick Full quality first' : (upscale ? ($('u-native').checked ? 'rendered natively' : 'upscaled from 1080p with ffmpeg; the 1080p file is kept') : '');
+}
+document.querySelectorAll('#u-seg button').forEach(b => b.addEventListener('click', () => {
+  upscale = b.dataset.u; document.querySelectorAll('#u-seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); syncUpscale();
+}));
+$('u-native').addEventListener('change', syncUpscale);
+document.querySelectorAll('#q-seg button').forEach(b => b.addEventListener('click', () => {
+  quality = b.dataset.q; document.querySelectorAll('#q-seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); syncUpscale();
+}));
+document.querySelectorAll('#view-tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.v)));
+
+function brief() {
+  return { template, topic: $('topic').value.trim(), description: $('description').value.trim(), url: $('url').value.trim(),
+           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), quality, ...upOpts(), ...voOpts() };
+}
+function voOpts() {
+  return $('vo').checked ? { voiceover: true, voice: $('vo-voice').value.trim() || undefined } : {};
+}
+function upOpts() {
+  return quality === 'final' && upscale ? { upscale, upscale_method: $('u-native').checked ? 'native' : 'ffmpeg' } : {};
+}
+function busy(on) { ['plan-btn', 'make-btn', 'render-btn'].forEach(id => $(id).disabled = on); }
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({ error: 'The server sent an unreadable reply.' }));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status}).`);
+  return j;
+}
+
+function drawStrip(sb, nowT) {
+  const plan = sb.plan; const strip = $('strip'); strip.innerHTML = '';
+  $('plan-view').hidden = false;
+  const total = sb.duration;
+  const items = plan || sb.scenes.map(s => ({ type: s.type, duration: total / sb.scenes.length }));
+  let acc = 0;
+  items.forEach(p => {
+    const d = document.createElement('div');
+    d.style.flex = p.duration;
+    d.innerHTML = `<b>${p.type}</b><span>${p.duration.toFixed(1)}s</span>`;
+    if (nowT != null) { if (acc + p.duration <= nowT) d.className = 'done'; else if (acc <= nowT) d.className = 'now'; }
+    acc += p.duration; strip.appendChild(d);
+  });
+  $('tc-end').textContent = `${total}s${plan ? '' : ', timing set at render'}`;
+}
+
+async function plan() {
+  $('err').textContent = ''; busy(true);
+  showStatus({ stage: 'planning', progress: 0, log: [] });
+  try {
+    const j = await api('/api/plan', brief());
+    $('sb').value = JSON.stringify(j.storyboard, null, 2); $('sb-wrap').hidden = false;
+    if (j.storyboard.accent && !$('accent-hex').value) setAccent(j.storyboard.accent);
+    drawStrip(j.storyboard);
+    showStatus({ stage: 'done', progress: 1, log: [`Planned by ${j.planned_by === 'llm' ? 'the LLM' : 'the built-in planner'}.`, j.source_note || ''] },
+      `Storyboard ready: ${j.storyboard.scenes.length} scenes. Edit it below or render it as is.`);
+  } catch (e) { $('err').textContent = e.message; $('status').hidden = true; }
+  busy(false);
+}
+
+async function start(path, body) {
+  $('err').textContent = '';
+  const btns = ['make-btn', 'render-btn'].map($); btns.forEach(b => b.disabled = true);
+  try {
+    const { id, position } = await api(path, body);
+    $('err').style.color = 'var(--ink-2)';
+    $('err').textContent = position > 1 ? `Added to the queue, number ${position} in line.` : 'Added. It starts right away.';
+    setTimeout(() => { $('err').textContent = ''; $('err').style.color = ''; }, 4000);
+    await loadJobs(); openJob(id);
+  } catch (e) { $('err').style.color = ''; $('err').textContent = e.message; }
+  btns.forEach(b => b.disabled = false);
+}
+function make() { start('/api/generate', brief()); }
+function renderSb() {
+  let sb; try { sb = JSON.parse($('sb').value); } catch (e) { $('err').textContent = `The storyboard isn't valid JSON: ${e.message}`; return; }
+  start('/api/render', { storyboard: sb, quality, ...upOpts(), ...voOpts(), handle: $('handle').value.trim(), duration: sb.duration });
+}
+
+function showStatus(j, text) {
+  $('status').hidden = false;
+  const label = text || (STAGES[j.stage] || j.stage) + (['rendering', 'upscale'].includes(j.stage) ? ` ${Math.round(j.progress * 100)}%` : '');
+  $('what').textContent = label;
+  $('bar').style.width = `${Math.round((j.stage === 'done' ? 1 : j.progress) * 100)}%`;
+  $('log').textContent = (j.log || []).filter(Boolean).join('\n');
+}
+
+function ago(t) {
+  const d = Date.now() / 1000 - t;
+  if (d < 60) return 'just now'; if (d < 3600) return `${Math.floor(d / 60)} min ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
+  return new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function statusLine(j) {
+  if (j.status === 'queued') return j.position ? `Queued, number ${j.position} in line` : 'Queued';
+  if (j.status === 'running') return (STAGES[j.stage] || j.stage) + (['rendering', 'upscale'].includes(j.stage) ? ` ${Math.round(j.progress * 100)}%` : '') + (j.cancel_requested ? ', cancelling…' : '');
+  if (j.status === 'done') return 'Done';
+  if (j.status === 'error') return 'Failed';
+  return STAGES[j.status] || j.status;
+}
+function optsLine(j) {
+  const o = j.options || {}, r = (j.result && j.result.resolution) || o.resolution;
+  const tn = (templates.find(t => t.id === o.template) || {}).name;
+  return [tn || '', o.duration ? `${Math.round(o.duration)}s` : '', r ? `${r[1]}p` : (o.quality === 'draft' ? 'draft' : ''),
+          o.upscale ? o.upscale.toUpperCase() : '', o.voiceover ? `voice-over${o.voice ? ' (' + o.voice + ')' : ''}` : ''].filter(Boolean).join(', ');
+}
+
+async function loadJobs() {
+  clearTimeout(jobsTimer);
+  let list = [];
+  try { list = await api('/api/jobs'); } catch (e) { jobsTimer = setTimeout(loadJobs, 5000); return list; }
+  $('jobs-wrap').hidden = !list.length;
+  const active = list.filter(j => ['queued', 'running'].includes(j.status)).length;
+  $('jobs-count').textContent = list.length ? `${active ? active + ' in progress, ' : ''}${list.length} total` : '';
+  $('jobs').innerHTML = list.map(j => `<li><button type="button" class="job-row st-${j.status}" data-id="${j.id}" ${j.id === openId ? 'aria-current="true"' : ''}>
+      <span class="dot" aria-hidden="true"></span><span class="t">${esc(j.title)}</span><span class="when">${ago(j.created)}</span>
+      <span class="m">${esc(statusLine(j))}${optsLine(j) ? ' · ' + esc(optsLine(j)) : ''}</span>
+      ${j.status === 'running' ? `<span class="mini"><i style="width:${Math.round(j.progress * 100)}%"></i></span>` : ''}</button></li>`).join('');
+  $('jobs').querySelectorAll('.job-row').forEach(b => b.addEventListener('click', () => openJob(b.dataset.id)));
+  jobsTimer = setTimeout(loadJobs, active ? 2000 : 15000);
+  return list;
+}
+
+function resetStage(text) {
+  current = null; $('view-tabs').hidden = true; $('downloads').hidden = true; $('caps').innerHTML = ''; $('plan-view').hidden = true;
+  $('frame').innerHTML = `<div class="empty"><strong>${esc(text)}</strong>The video appears here when it's ready. You can add more jobs meanwhile.</div>`;
+}
+
+async function openJob(id) {
+  clearInterval(polling); openId = id; lastDetail = '';
+  document.querySelectorAll('.job-row').forEach(b => b.toggleAttribute('aria-current', b.dataset.id === id));
+  $('job-confirm').hidden = true;
+  const tick = async () => {
+    let j; try { j = await api(`/api/jobs/${id}`); } catch (e) { clearInterval(polling); $('job-head').hidden = true; resetStage('This job no longer exists'); return; }
+    if (openId !== id) return;
+    renderJob(j);
+    if (!['queued', 'running'].includes(j.status)) clearInterval(polling);
+  };
+  await tick();
+  polling = setInterval(tick, 1000);
+}
+
+function renderJob(j) {
+  $('job-head').hidden = false;
+  $('job-title').textContent = j.title;
+  $('job-meta').textContent = [`Added ${ago(j.created)}`, optsLine(j), j.retry_of ? 'rerun of an earlier job' : ''].filter(Boolean).join(' · ');
+  const active = ['queued', 'running'].includes(j.status);
+  $('job-cancel').hidden = !active || j.cancel_requested;
+  $('job-retry').hidden = active || j.kind === 'imported';
+  $('job-delete').hidden = active;
+  $('job-err').hidden = !j.error; $('job-err').textContent = j.error || '';
+  const key = j.status + (j.result ? '1' : '0');
+  if (j.status === 'done' && j.result) {
+    if (lastDetail !== key) { showResult(j.result); lastDetail = key; }
+    $('log').textContent = (j.log || []).filter(Boolean).join('\n');
+    return;
+  }
+  if (lastDetail !== key) { resetStage(j.status === 'queued' ? 'Waiting in the queue' : j.status === 'running' ? 'Working on it' : statusLine(j)); lastDetail = key; }
+  showStatus(j, statusLine(j));
+  if (!active) $('bar').style.width = '0%';
+}
+
+$('job-cancel').addEventListener('click', async () => {
+  try { await api(`/api/jobs/${openId}/cancel`, {}); loadJobs(); } catch (e) { $('job-err').hidden = false; $('job-err').textContent = e.message; }
+});
+$('job-retry').addEventListener('click', async () => {
+  try { const { id } = await api(`/api/jobs/${openId}/retry`, {}); await loadJobs(); openJob(id); }
+  catch (e) { $('job-err').hidden = false; $('job-err').textContent = e.message; }
+});
+$('job-delete').addEventListener('click', () => { $('job-confirm').hidden = false; $('job-delete').hidden = true; });
+$('del-no').addEventListener('click', () => { $('job-confirm').hidden = true; $('job-delete').hidden = false; });
+async function delJob(files) {
+  try {
+    await api(`/api/jobs/${openId}/delete`, { files }); openId = null; clearInterval(polling);
+    $('job-head').hidden = true; $('status').hidden = true; resetStage('Job deleted'); loadJobs();
+  } catch (e) { $('job-err').hidden = false; $('job-err').textContent = e.message; }
+}
+$('del-keep').addEventListener('click', () => delJob(false));
+$('del-files').addEventListener('click', () => delJob(true));
+
+function showView(v) {
+  if (!current) return;
+  document.querySelectorAll('#view-tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+  const base = current.base, bust = `?t=${Date.now()}`;
+  $('frame').innerHTML = v === 'video'
+    ? `<video src="${base}video.mp4" controls playsinline autoplay></video>`
+    : `<img src="${base}cover.png${bust}" alt="Cover image">`;
+  if (v === 'video') {
+    const vid = $('frame').querySelector('video');
+    vid.addEventListener('timeupdate', () => drawStrip(current.storyboard, vid.currentTime));
+  }
+}
+
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+function showResult(r) {
+  current = r; $('view-tabs').hidden = false; showView('video');
+  if (!$('accent-hex').value && r.storyboard.accent) setAccent(r.storyboard.accent);
+  drawStrip(r.storyboard, 0);
+  $('sb').value = JSON.stringify(Object.fromEntries(Object.entries(r.storyboard).filter(([k]) => k !== 'plan')), null, 2);
+  $('sb-wrap').hidden = false;
+  const m = r.manifest;
+  showStatus({ stage: 'done', progress: 1, log: [] }, `Done in ${Math.round(m.seconds)}s. Planned by ${m.planned_by === 'llm' ? 'the LLM' : m.planned_by === 'provided' ? 'your storyboard' : 'the built-in planner'}, captions by ${m.captions_by === 'llm' ? 'the LLM' : 'template'}.`);
+  $('downloads').hidden = false;
+  const res = (m.resolution || [1080, 1920]).join(' × ');
+  const vids = m.files && m.files.video_hd
+    ? [['video.mp4', 'Download 1080p video'], [m.files.video_hd, `Download ${m.upscale.toUpperCase()} video`]]
+    : [['video.mp4', m.upscale ? `Download ${m.upscale.toUpperCase()} video` : 'Download video']];
+  const extra = m.files && m.files.narration ? [['narration.srt', 'Download subtitles (.srt)'], ['voiceover.wav', 'Download voice track']] : [];
+  $('downloads').innerHTML = [...vids, ['cover.png', `Download cover (${res})`], ...extra, ['captions.md', 'Download captions'], ['storyboard.json', 'Download storyboard']]
+    .map(([f, l]) => `<a href="${r.base}${f}?dl=1">${l}</a>`).join('');
+  const c = r.captions, yt = c.youtube;
+  const cards = [['Instagram', c.instagram], ['Facebook', c.facebook], ['YouTube title', yt.title],
+                 ['YouTube description', yt.description], ['YouTube tags', (yt.tags || []).join(', ')]];
+  $('caps').innerHTML = cards.map(([t, body], i) =>
+    `<article class="cap"><header><h3>${t}</h3><button class="copy" data-i="${i}" type="button">Copy</button></header><pre>${esc(body)}</pre></article>`).join('');
+  $('caps').querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(cards[b.dataset.i][1]); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1400);
+  }));
+  if (m.files && m.files.narration) {
+    fetch(`${r.base}narration.json`).then(x => x.json()).then(n => {
+      if (current !== r) return;
+      const script = n.segments.map(sg => sg.text).join('\n');
+      const el = document.createElement('article'); el.className = 'cap';
+      el.innerHTML = `<header><h3>Voice-over script</h3><button class="copy" type="button">Copy</button></header><pre>${esc(n.segments.map(sg => `${sg.start.toFixed(1)}s  ${sg.text}`).join('\n'))}</pre>`;
+      el.querySelector('.copy').addEventListener('click', async (ev) => { await navigator.clipboard.writeText(script); ev.target.textContent = 'Copied'; setTimeout(() => ev.target.textContent = 'Copy', 1400); });
+      $('caps').prepend(el);
+    }).catch(() => {});
+  }
+}
+
+$('plan-btn').addEventListener('click', plan);
+$('make-btn').addEventListener('click', make);
+$('render-btn').addEventListener('click', renderSb);
+function refreshStatus() {
+  api('/api/status').then(s => {
+    $('llm').innerHTML = s.llm
+      ? `Writing with <b>${esc(s.llm.label)}</b>, ${esc(s.llm.model || 'no model set')}${s.llm.local ? ' on this machine' : ''}. ${s.cpus} ${s.cpus === 1 ? 'core' : 'cores'} for rendering.`
+      : `No language model connected, so the built-in planner writes the storyboard. <b>Settings</b> connects Ollama, vLLM or a hosted API.`;
+  }).catch(() => $('llm').textContent = 'Could not reach the server.');
+}
+refreshStatus();
+
+/* ---------------- settings ---------------- */
+let presets = {}, saved = null, chosen = 'none';
+const NONE = { label: 'None', help: 'Storyboards and captions come from the built-in planner. Nothing is sent to a model.' };
+const F = { base: 'c-base', key: 'c-key', model: 'c-model', temp: 'c-temp', max: 'c-max', timeout: 'c-timeout', src: 'c-src', ctx: 'c-ctx' };
+
+function pickProvider(id, fromSaved) {
+  chosen = id;
+  document.querySelectorAll('.prov').forEach(b => b.setAttribute('aria-checked', b.dataset.p === id));
+  const p = presets[id] || NONE;
+  $('prov-help').innerHTML = esc(p.help).replace(/`([^`]+)`/g, '<code>$1</code>');
+  $('prov-fields').hidden = id === 'none';
+  $('test-btn').hidden = id === 'none';
+  $('test-result').className = 'result';
+  if (id === 'none') return;
+  const useSaved = fromSaved && saved && saved.provider === id;
+  const v = useSaved ? saved : { base_url: p.base_url, model: p.model, api_key: '', temperature: 0.7, max_tokens: 5000,
+    timeout: p.timeout, max_source_chars: p.max_source_chars, num_ctx: p.num_ctx || 16384, json_mode: true, headers: {} };
+  $(F.base).value = v.base_url || p.base_url; dockHint('c-base', 'c-dock'); $(F.model).value = v.model || '';
+  $(F.key).value = useSaved ? (saved.api_key || '') : '';
+  $(F.key).placeholder = p.needs_key ? 'Required' : 'Not needed for most local servers';
+  $('key-hint').textContent = p.needs_key ? '' : 'optional';
+  $(F.temp).value = v.temperature; $(F.max).value = v.max_tokens; $(F.timeout).value = v.timeout;
+  $(F.src).value = v.max_source_chars; $(F.ctx).value = v.num_ctx; $('c-json').checked = v.json_mode !== false;
+  $('c-headers').value = Object.entries(v.headers || {}).map(([k, x]) => `${k}: ${x}`).join('\n');
+  $('ctx-wrap').hidden = p.kind !== 'ollama';
+  $(F.model).placeholder = p.kind === 'ollama' ? 'e.g. llama3.1:8b' : p.label === 'vLLM' ? 'Exactly as vLLM serves it' : 'Model name';
+  $('model-list').innerHTML = '';
+  $('privacy').innerHTML = p.local
+    ? 'Prompts go to the endpoint above. If it runs on this machine, your briefs and fetched pages never leave it.'
+    : `Your brief and the text of any link you give are sent to ${esc(p.label)} to write the storyboard and captions.`;
+}
+
+function formConfig() {
+  if (chosen === 'none') return { provider: 'none' };
+  const headers = {};
+  $('c-headers').value.split('\n').forEach(l => { const i = l.indexOf(':'); if (i > 0) headers[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
+  return { provider: chosen, base_url: $(F.base).value.trim(), api_key: $(F.key).value, model: $(F.model).value.trim(),
+    temperature: $(F.temp).value, max_tokens: $(F.max).value, timeout: $(F.timeout).value, max_source_chars: $(F.src).value,
+    num_ctx: $(F.ctx).value, json_mode: $('c-json').checked, headers };
+}
+
+function showResult_(ok, text) { const r = $('test-result'); r.className = 'result ' + (ok ? 'ok' : 'bad'); r.textContent = text; }
+
+async function openSettings(tab) {
+  await loadVoiceSettings().catch(() => {});
+  setTab(tab === 'voice' ? 'voice' : 'llm');
+  const j = await api('/api/config');
+  presets = j.presets; saved = j.config;
+  const list = [['none', NONE.label, 'Built-in planner']].concat(Object.entries(presets).map(([id, p]) => [id, p.label, p.local ? 'Runs locally' : 'Hosted API']));
+  $('providers').innerHTML = list.map(([id, l, sub]) => `<button type="button" role="radio" class="prov" data-p="${id}" aria-checked="false"><b>${esc(l)}</b><span>${sub}</span></button>`).join('');
+  $('providers').querySelectorAll('.prov').forEach(b => b.addEventListener('click', () => pickProvider(b.dataset.p, true)));
+  pickProvider(saved.provider in presets ? saved.provider : 'none', true);
+  $('cfg-path').textContent = `Saved to ${saved.path}`;
+  $('settings').showModal();
+}
+
+$('open-settings').addEventListener('click', () => openSettings().catch(e => alert(e.message)));
+$('cancel-btn').addEventListener('click', () => $('settings').close());
+$('find-models').addEventListener('click', async () => {
+  const b = $('find-models'); b.disabled = true; b.textContent = 'Looking…';
+  try {
+    const { models } = await api('/api/config/models', formConfig());
+    $('model-list').innerHTML = models.map(m => `<option value="${esc(m)}">`).join('');
+    if (models.length && !$(F.model).value) $(F.model).value = models[0];
+    showResult_(models.length > 0, models.length ? `Found ${models.length} model${models.length > 1 ? 's' : ''}: ${models.slice(0, 12).join(', ')}${models.length > 12 ? '…' : ''}` : 'The server answered but lists no models. Load or pull one first.');
+  } catch (e) { showResult_(false, e.message); }
+  b.disabled = false; b.textContent = 'Find models';
+});
+$('test-btn').addEventListener('click', async () => {
+  const b = $('test-btn'); b.disabled = true; b.textContent = 'Testing…';
+  try {
+    const r = await api('/api/config/test', formConfig());
+    if (r.models) $('model-list').innerHTML = r.models.map(m => `<option value="${esc(m)}">`).join('');
+    let msg = r.ok ? `Connected. The model answered with valid JSON in ${r.seconds < 1 ? 'under a second' : r.seconds + 's'}.` : `Not working yet: ${r.error}`;
+    if (r.model_found === false) msg += `\nThe model "${$(F.model).value}" isn't in this server's list. Available: ${(r.models || []).slice(0, 10).join(', ')}`;
+    if (r.ok && r.seconds > 30) msg += '\nThat was slow. A full storyboard takes much longer, so keep the timeout generous.';
+    showResult_(r.ok, msg);
+  } catch (e) { showResult_(false, e.message); }
+  b.disabled = false; b.textContent = 'Test connection';
+});
+$('save-btn').addEventListener('click', async () => {
+  try {
+    const j = chosen === 'none' ? await api('/api/config/clear', {}) : await api('/api/config', formConfig());
+    saved = j.config; $('settings').close(); refreshStatus(); refreshVoice();
+  } catch (e) { showResult_(false, e.message); }
+});
+$('clear-btn').addEventListener('click', async () => {
+  try { const j = await api('/api/config/clear', {}); saved = j.config; pickProvider('none'); refreshStatus(); showResult_(true, 'Disconnected. The built-in planner will be used.'); }
+  catch (e) { showResult_(false, e.message); }
+});
+/* ---------------- voice settings ---------------- */
+let vPresets = {}, vSaved = null, vChosen = 'none';
+const VNONE = { label: 'Off', help: 'No voice-over. Videos use music and sound effects only.' };
+function setTab(t) {
+  ['llm', 'voice'].forEach(x => { $('tab-' + x).setAttribute('aria-selected', x === t); $('pane-' + x).hidden = x !== t; });
+}
+$('tab-llm').addEventListener('click', () => setTab('llm'));
+$('tab-voice').addEventListener('click', () => setTab('voice'));
+function vShow(ok, text) { const r = $('v-result'); r.className = 'result ' + (ok ? 'ok' : 'bad'); r.textContent = text; }
+function vPick(id, fromSaved) {
+  vChosen = id;
+  document.querySelectorAll('#v-providers .prov').forEach(b => b.setAttribute('aria-checked', b.dataset.p === id));
+  const p = vPresets[id] || VNONE;
+  $('v-help').textContent = p.help; $('v-fields').hidden = id === 'none'; $('v-test').hidden = id === 'none';
+  $('v-result').className = 'result'; $('v-audio').hidden = true;
+  if (id === 'none') return;
+  const use = fromSaved && vSaved && vSaved.provider === id;
+  const v = use ? vSaved : { base_url: p.base_url, model: p.model, voice: p.voice, speed: 1.0, response_format: 'wav', timeout: 120, api_key: '', headers: {}, has_key: false };
+  $('v-base').value = v.base_url; dockHint('v-base', 'v-dock'); $('v-model').value = v.model; $('v-voice').value = v.voice;
+  $('v-speed').value = v.speed; $('v-speed-v').textContent = (+v.speed).toFixed(2) + '×';
+  $('v-format').value = v.response_format || 'wav'; $('v-timeout').value = v.timeout;
+  $('v-key').value = use ? (v.api_key || '') : '';
+  $('v-key').placeholder = p.needs_key ? 'Required' : 'Not needed for most local servers';
+  $('v-key-hint').textContent = use && v.has_key ? 'saved, leave as is to keep it' : (p.needs_key ? 'required' : 'optional');
+  $('v-headers').value = Object.entries(v.headers || {}).map(([k, x]) => `${k}: ${x}`).join('\n');
+}
+function vForm() {
+  if (vChosen === 'none') return { provider: 'none' };
+  const headers = {};
+  $('v-headers').value.split('\n').forEach(l => { const i = l.indexOf(':'); if (i > 0) headers[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
+  return { provider: vChosen, base_url: $('v-base').value.trim(), api_key: $('v-key').value, model: $('v-model').value.trim(),
+           voice: $('v-voice').value.trim(), speed: $('v-speed').value, response_format: $('v-format').value, timeout: $('v-timeout').value, headers };
+}
+async function loadVoiceSettings() {
+  const j = await api('/api/tts'); vPresets = j.presets; vSaved = j.config;
+  const list = [['none', VNONE.label, 'No voice-over']].concat(Object.entries(vPresets).map(([id, p]) => [id, p.label, p.needs_key ? 'Hosted API' : 'Runs locally']));
+  $('v-providers').innerHTML = list.map(([id, l, sub]) => `<button type="button" role="radio" class="prov" data-p="${id}" aria-checked="false"><b>${esc(l)}</b><span>${sub}</span></button>`).join('');
+  $('v-providers').querySelectorAll('.prov').forEach(b => b.addEventListener('click', () => vPick(b.dataset.p, true)));
+  vPick(vSaved.provider in vPresets ? vSaved.provider : 'none', true);
+}
+$('v-speed').addEventListener('input', e => $('v-speed-v').textContent = (+e.target.value).toFixed(2) + '×');
+$('v-find').addEventListener('click', async () => {
+  const b = $('v-find'); b.disabled = true; b.textContent = 'Loading…';
+  try {
+    const { voices, source } = await api('/api/tts/voices', vForm());
+    $('v-voice-list').innerHTML = voices.map(v => `<option value="${esc(v)}">`).join('');
+    const some = voices.slice(0, 14).join(', ') + (voices.length > 14 ? '…' : '');
+    if (source === 'server') vShow(true, `Your server offers ${voices.length} voice${voices.length > 1 ? 's' : ''}: ${some}`);
+    else if (source === 'kokoro-standard') vShow(true, `Your server doesn't publish a voice list, so these are the standard Kokoro voices (pick one from the Default voice box): ${some}\nServers differ, so press Play a sample to check that yours accepts the one you pick. Some also take OpenAI names such as nova or alloy.`);
+    else if (source === 'openai-standard') vShow(true, `OpenAI voices: ${some}`);
+    else vShow(false, "Your server doesn't publish a voice list. Type a voice name it accepts (the one you use with curl works), then press Play a sample to check it.");
+  } catch (e) { vShow(false, e.message); }
+  b.disabled = false; b.textContent = 'Load voices';
+});
+$('v-test').addEventListener('click', async () => {
+  const b = $('v-test'); b.disabled = true; b.textContent = 'Speaking…';
+  try {
+    const r = await api('/api/tts/test', vForm());
+    if (r.ok) { $('v-audio').src = r.audio; $('v-audio').hidden = false; $('v-audio').play().catch(() => {}); vShow(true, `Works. ${r.duration}s of speech came back in ${r.seconds}s.`); }
+    else { $('v-audio').hidden = true; vShow(false, `Not working yet: ${r.error}`); }
+  } catch (e) { vShow(false, e.message); }
+  b.disabled = false; b.textContent = 'Play a sample';
+});
+$('v-save').addEventListener('click', async () => {
+  try { const j = await api('/api/tts', vForm()); vSaved = j.config; $('settings').close(); refreshVoice(); }
+  catch (e) { vShow(false, e.message); }
+});
+$('v-clear').addEventListener('click', async () => {
+  try { const j = await api('/api/tts', { provider: 'none' }); vSaved = j.config; vPick('none'); refreshVoice(); vShow(true, 'Voice-over is off.'); }
+  catch (e) { vShow(false, e.message); }
+});
+$('v-cancel').addEventListener('click', () => $('settings').close());
+
+/* in a container, "localhost" is the container: say so the moment it's typed */
+let inDocker = false;
+api('/api/status').then(s => { inDocker = !!s.in_docker; dockHint('v-base', 'v-dock'); dockHint('c-base', 'c-dock'); }).catch(() => {});
+function dockHint(inputId, noteId) {
+  const el = $(noteId); let u;
+  try { u = new URL($(inputId).value); } catch (e) { el.hidden = true; return; }
+  const loop = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0'].includes(u.hostname);
+  el.hidden = !(inDocker && loop);
+  if (!el.hidden) {
+    const alt = new URL(u); alt.hostname = 'host.docker.internal';
+    el.innerHTML = `Reelsmith runs in a container, where <code>${esc(u.hostname)}</code> is the container itself, not your computer. ` +
+      `For a server on your computer use <code>${esc(alt.href.replace(/\/$/, ''))}</code>. <button type="button" class="link-btn" style="color:var(--ink);text-decoration:underline;padding:0">Use it</button>`;
+    el.querySelector('button').addEventListener('click', () => { $(inputId).value = alt.href.replace(/\/$/, ''); dockHint(inputId, noteId); });
+  }
+}
+['v-base', 'c-base'].forEach(id => $(id).addEventListener('input', () => dockHint(id, id[0] + '-dock')));
+
+/* brief: voice-over availability */
+async function refreshVoice() {
+  try {
+    const [t, st] = await Promise.all([api('/api/tts'), api('/api/status')]);
+    voiceReady = t.ready;
+    $('vo').disabled = !voiceReady;
+    if (!voiceReady) { $('vo').checked = false; $('vo-opts').hidden = true; }
+    $('vo-hint').innerHTML = !voiceReady
+      ? 'Needs a text-to-speech server. <button class="link-btn" type="button" id="vo-setup">Set up a voice</button>'
+      : st.llm ? `The language model writes the narration and ${esc(t.config.provider === 'kokoro' ? 'Kokoro' : 'your TTS server')} speaks it as ${esc(t.config.voice)}.`
+               : 'No language model is connected, so the narration reads the on-screen text.';
+    const s2 = $('vo-setup'); if (s2) s2.addEventListener('click', () => openSettings('voice').catch(e => alert(e.message)));
+    if (voiceReady) api('/api/tts/voices', {}).then(r => { $('vo-voice-list').innerHTML = r.voices.map(v => `<option value="${esc(v)}">`).join(''); }).catch(() => {});
+  } catch (e) { $('vo-hint').textContent = 'Could not read the voice settings.'; }
+}
+$('vo').addEventListener('change', () => { $('vo-opts').hidden = !$('vo').checked; });
+refreshVoice();
+/* template picker */
+function pickTemplate(id) {
+  template = id;
+  document.querySelectorAll('.tpl').forEach(b => b.setAttribute('aria-checked', b.dataset.t === id));
+  const t = templates.find(x => x.id === id); if (!t) return;
+  $('tpl-hint').textContent = t.tone;
+  $('accent-hex').placeholder = t.accent_free ? 'Let the planner choose' : `Template default, ${t.accent.toUpperCase()}`;
+  if (!$('accent-hex').value.trim()) { $('accent').value = t.accent.toLowerCase(); setAccent(t.accent); }
+}
+api('/api/templates').then(list => {
+  templates = list;
+  $('tpl-grid').innerHTML = list.map(t => `<button type="button" class="tpl" role="radio" aria-checked="false" data-t="${t.id}">
+      <img src="/api/templates/${t.id}/preview.png" alt="" loading="lazy" width="270" height="480">
+      <b>${esc(t.name)}</b><span>${esc(t.description)}</span></button>`).join('');
+  $('tpl-grid').querySelectorAll('.tpl').forEach(b => b.addEventListener('click', () => pickTemplate(b.dataset.t)));
+  pickTemplate(template);
+  loadJobs();
+}).catch(() => { $('tpl-grid').textContent = 'Could not load templates.'; });
+loadJobs().then(list => { if (list.length && !openId) openJob(list[0].id); });
+</script>
+</body>
+</html>

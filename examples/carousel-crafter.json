@@ -1,0 +1,35 @@
+{
+  "name": "Carousel-Crafter",
+  "accent": "#F0B429",
+  "duration": 45,
+  "scenes": [
+    {"type": "hook", "kicker": "Designing a", "big": "carousel", "punch": "by hand?",
+     "pains": ["Nudging text boxes until they fit", "Guessing font sizes for code", "Re-exporting ten slides again"],
+     "answer": "Let the tool decide.", "accent": "tool"},
+    {"type": "title", "name": "Carousel-Crafter", "tagline": "Markdown in. Posting-ready carousels out."},
+    {"type": "code", "caption": "Write Markdown.", "accent": "Markdown", "subtitle": "Each --- starts a new slide.",
+     "filename": "posts/my-post.md", "language": "markdown",
+     "lines": ["---", "title: React Server Components", "---", "", "# Where your code actually runs", "", "---", "",
+               "## They never reach the browser", "", "```tsx", "export default async function Page() {",
+               "  const posts = await db.post.findMany();", "}", "```", "", "---", "", "## What you give up",
+               "- No `useState` or `useEffect`"],
+     "callouts": [{"line": 6, "label": "new slide 02"}, {"line": 16, "label": "new slide 03"}]},
+    {"type": "statement", "text": "A post should never silently look wrong.", "accent": "never",
+     "sub": "Every slide is measured in a real browser before export."},
+    {"type": "features", "items": [
+      {"title": "Draft with AI", "subtitle": "Any OpenAI-compatible endpoint.", "points": ["Ollama", "vLLM", "OpenRouter", "OpenAI"]},
+      {"title": "Draft from a link", "subtitle": "GitHub repos & Hugging Face models.", "points": ["README", "Stars", "Licence", "Base model"]},
+      {"title": "Captions", "subtitle": "Hook, insight, a real question, hashtags.", "points": ["caption.txt", "#hashtags"]}]},
+    {"type": "stats", "caption": "One command.", "accent": "One", "items": [
+      {"value": "40", "label": "lines of Markdown"}, {"value": "6", "label": "posting-ready slides"}, {"value": "0", "label": "design tools"}]},
+    {"type": "steps", "title": "How it works", "subtitle": "Preview and export share one renderer.", "steps": [
+      {"title": "post.md", "sub": "Markdown + frontmatter"}, {"title": "SlideDoc", "sub": "split on ---, roles assigned"},
+      {"title": "React → HTML", "sub": "fonts & images embedded"}, {"title": "Playwright", "sub": "measure → shrink → split"},
+      {"title": "PNGs + zip", "sub": "1080 × 1350"}], "footer": "Offline: nothing fetched at render time"},
+    {"type": "terminal", "caption": "Ship it.", "accent": "Ship", "command": "node dist/cli.js post.md -o out --zip",
+     "outputs": ["  rendering 6 slides…", "✓ 6 slides · 0 overflows", "✓ out/carousel.zip"]},
+    {"type": "cta", "name": "Carousel-Crafter", "url": "github.com/mkamranr/carousel-crafter",
+     "tagline": "Open source · MIT · Node 22+ or Docker", "line": "Write the post. Skip the design.", "accent": "Skip"}
+  ],
+  "cover": {"kicker": "MARKDOWN IN", "lines": ["Instagram", "carousels", "out."], "accent_line": 1, "badge": "NO FIGMA"}
+}
