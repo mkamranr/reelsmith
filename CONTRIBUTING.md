@@ -24,5 +24,9 @@ the provider and model you use, and `/api/status` output. Remove API keys before
 - New templates go in `reelsmith/engine/templates.py`: copy an entry, change its palette, fonts, shape, background
   style, transition, music and tone. A new background style is a `_bg_<name>` method in `engine/timeline.py`. Run the
   tests: they render every scene type in every template.
+- A template's story structure lives in `reelsmith/blueprints.py`: which scene types it uses (`ALLOWED`), its
+  opening scene (`OPENING`), how many repeated scenes fit a length (`counts`), what the model is told
+  (`blueprint_text`), how other scene types are converted (`_convert`) and how the built-in planner fills it
+  (`assemble`). `tests/` checks that every template's plan opens correctly and that all six differ.
 - Content comes from language models, so never assume a string length: use `fit_size`, `fit_block` or `headline`.
 - The web app is a single file with no build step (`reelsmith/web/index.html`); please keep it that way.
