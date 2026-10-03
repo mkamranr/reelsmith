@@ -27,6 +27,7 @@ def make_runner(out_root):
     def run(job, hooks):
         p = job['payload']
         inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template')}
+        inputs['restructure'] = bool(p.get('restructure'))
         inputs['duration'] = float(p.get('duration') or (p.get('storyboard') or {}).get('duration') or 45)
         return pipeline.generate(
             inputs, out_root, 'draft' if p.get('quality') == 'draft' else 'final', storyboard=p.get('storyboard'),

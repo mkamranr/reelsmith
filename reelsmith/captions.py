@@ -58,6 +58,7 @@ def template(sb, source=None):
     first = first.rstrip('.!?…')
     points = []
     for s in sb['scenes']:
+        if s['type'] in ('rank', 'chapter') and s.get('title'): points.append(s['title']); continue
         for it in (s.get('items') or []) + (s.get('steps') or []):
             t = it.get('title') if isinstance(it, dict) else str(it)
             if t: points.append(t)

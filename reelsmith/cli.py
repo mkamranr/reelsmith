@@ -29,6 +29,7 @@ def main(argv=None):
     r.add_argument('storyboard')
     r.add_argument('--duration', type=float, default=None)
     r.add_argument('--template', default='', help='render in a different template than the storyboard says')
+    r.add_argument('--restructure', action='store_true', help="also rebuild the story in the template's structure (e.g. a countdown for pop)")
     r.add_argument('--draft', action='store_true')
     r.add_argument('--upscale', choices=['2k', '4k'])
     r.add_argument('--voiceover', action='store_true')
@@ -113,7 +114,7 @@ def main(argv=None):
             return 0
         if a.cmd == 'render':
             sb = json.load(open(a.storyboard))
-            inputs = {'duration': a.duration or sb.get('duration', 45), 'handle': sb.get('handle', ''), 'template': a.template}
+            inputs = {'duration': a.duration or sb.get('duration', 45), 'handle': sb.get('handle', ''), 'template': a.template, 'restructure': a.restructure}
             pipeline.generate(inputs, a.out, 'draft' if a.draft else 'final', a.workers, storyboard=sb, use_llm=not a.no_llm, progress=_bar(),
                               upscale=a.upscale, upscale_method=a.upscale_method,
                               voiceover=a.voiceover, voice=a.voice)

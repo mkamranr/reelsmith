@@ -26,6 +26,7 @@ BASE = dict(
     music=dict(bpm=120, prog='minor', pad='saw', pad_gain=0.08, pad_lp=1400, arp=None, arp_gain=0.0,
                bass=0.3, kick=0.42, hats=0.07, clap=0.0),
     sfx={}, tone='', prefer=[],
+    align='c', margin=90, pace=1.0, format='', blueprint='demo',
 )
 
 
@@ -37,6 +38,7 @@ def _t(**kw):
 
 TEMPLATES = {
     'midnight': _t(
+        format='Product demo', blueprint='demo',
         name='Midnight', description='Dark navy, amber, a faint grid and confident kinetic type. The original look.',
         accent_free=True,
         bg=(10, 14, 20), surf=(20, 28, 38), text=(244, 247, 250), muted=(128, 147, 166), border=(30, 42, 54),
@@ -45,6 +47,7 @@ TEMPLATES = {
         prefer=['code', 'terminal', 'steps', 'stats']),
 
     'editorial': _t(
+        format='Feature story', blueprint='story', align='l', margin=104, pace=1.1,
         name='Editorial', description='Paper-light pages, a serif display face, a red accent and thin rules. Page-turn cuts.',
         light=True, accent='#C8102E', acc2='#8F0A20',
         bg=(242, 240, 235), surf=(255, 255, 255), text=(22, 20, 18), muted=(108, 102, 94), border=(212, 206, 196),
@@ -59,6 +62,7 @@ TEMPLATES = {
         prefer=['statement', 'bullets', 'stats', 'title']),
 
     'terminal': _t(
+        format='README walkthrough', blueprint='walkthrough', align='l', margin=96, pace=0.95,
         name='Terminal', description='Black CRT with scanlines, all monospace, phosphor-green glow and glitch cuts.',
         accent='#39FF88', acc2='#00E5FF',
         bg=(4, 8, 6), surf=(8, 20, 13), text=(205, 255, 220), muted=(96, 168, 122), border=(32, 96, 60),
@@ -72,6 +76,7 @@ TEMPLATES = {
         prefer=['terminal', 'code', 'steps', 'stats']),
 
     'pop': _t(
+        format='Countdown listicle', blueprint='listicle', pace=0.8,
         name='Pop', description='Cream background, big colour shapes that change every scene, thick outlines and hard shadows.',
         light=True, accent='#2B59FF', acc2='#2B59FF',
         bg=(255, 246, 229), surf=(255, 255, 255), text=(17, 17, 17), muted=(72, 72, 72), border=(17, 17, 17),
@@ -87,6 +92,7 @@ TEMPLATES = {
         prefer=['hook', 'statement', 'stats', 'features', 'bullets']),
 
     'minimal': _t(
+        format='Keynote', blueprint='keynote', pace=1.25,
         name='Minimal', description='Near-white, light-weight type, generous space, soft shadows and quiet crossfades.',
         light=True, accent='#2563EB', acc2='#1D4ED8',
         bg=(247, 247, 248), surf=(255, 255, 255), text=(15, 17, 21), muted=(107, 114, 128), border=(229, 231, 235),
@@ -100,6 +106,7 @@ TEMPLATES = {
         prefer=['title', 'statement', 'features', 'bullets']),
 
     'aurora': _t(
+        format='Launch trailer', blueprint='trailer',
         name='Aurora', description='Deep violet with moving gradient light, frosted-glass cards and a modern grotesk.',
         accent='#F472B6', acc2='#22D3EE',
         bg=(11, 6, 32), surf=(255, 255, 255, 0.09), text=(250, 248, 255), muted=(196, 186, 228),
@@ -132,5 +139,5 @@ def listing():
     return [{'id': k, 'name': t['name'], 'description': t['description'], 'light': t['light'], 'accent': t['accent'],
              'swatches': [hexc(t['bg']), hexc(t['text']), t['accent'], t['acc2'] or t['accent']] +
                          [hexc(c) for c in t['bg_colors'][:2]],
-             'accent_free': t['accent_free'], 'tone': t['tone']}
+             'accent_free': t['accent_free'], 'tone': t['tone'], 'format': t['format'], 'blueprint': t['blueprint']}
             for k, t in TEMPLATES.items()]

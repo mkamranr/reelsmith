@@ -22,8 +22,15 @@ def _card(scene, name, footer):
     rrect(c, 90, 150, 36, 6, 3, TH.acc)
     text(c, name.upper()[:28], 142, 162, M(800, 30), TH.muted, track=4)
     k = scene['type']
-    head = S(scene, 'caption') or S(scene, 'title') or S(scene, 'text') or S(scene, 'big')
+    head = S(scene, 'caption') or S(scene, 'title') or S(scene, 'text') or S(scene, 'big') or ' '.join(scene.get('lines') or [])
     y = 280
+    if k in ('rank', 'chapter'):
+        num = S(scene, 'rank') or S(scene, 'number')
+        text(c, num, 90, 520, I(900, 300), TH.acc, track=-6)
+        y = 640
+    if k == 'quote':
+        text(c, '\u201c', 70, 470, I(800, 300), TH.acc)
+        y = 520
     if head:
         sz, lines = fit_block(head, 'inter', 800, 900, 84, 2, 40, -0.02)
         for ln in lines:
@@ -97,7 +104,7 @@ def render_cover(sb, path, scale=1.0):
     g = skia.GradientShader.MakeRadial(skia.Point(540, 1060), 620, [col(TH.acc, .22), col(TH.acc, 0)])
     c.drawRect(skia.Rect.MakeWH(W, H), skia.Paint(Shader=g))
 
-    pref = ['code', 'terminal', 'bullets', 'steps', 'features', 'stats', 'statement', 'hook']
+    pref = ['code', 'terminal', 'bullets', 'steps', 'features', 'rank', 'chapter', 'quote', 'stats', 'statement', 'teaser', 'hook']
     picks = []
     for kind in pref:
         for s in sb['scenes']:

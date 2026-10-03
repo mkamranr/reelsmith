@@ -19,6 +19,10 @@ SCHEMA = {
     'steps': {'title': ('s', 26), 'accent': ('s', 20), 'subtitle': ('s', 50), 'steps': ('items', 6, 22, 40, 'steps'), 'footer': ('s', 48)},
     'terminal': {'caption': ('s', 30), 'accent': ('s', 20), 'subtitle': ('s', 60), 'command': ('s', 56), 'outputs': ('l', 48, 4)},
     'cta': {'name': ('s', 32), 'url': ('s', 48), 'tagline': ('s', 60), 'line': ('s', 44), 'accent': ('s', 20)},
+    'quote': {'text': ('s', 140), 'by': ('s', 40), 'accent': ('s', 24)},
+    'chapter': {'number': ('s', 6), 'title': ('s', 44), 'body': ('s', 150), 'accent': ('s', 24)},
+    'rank': {'rank': ('s', 4), 'title': ('s', 40), 'sub': ('s', 90), 'accent': ('s', 24), 'of': ('i',)},
+    'teaser': {'lines': ('l', 34, 4)},
 }
 
 CATALOG = """
@@ -36,6 +40,10 @@ SCENE TYPES (use the exact field names; respect the max lengths in characters):
 - stats     — 1-3 big counting numbers. caption, accent, subtitle, items([{value ≤10 e.g. "12k+", "3×", "98%", label ≤40}]).
 - steps     — vertical pipeline/how-it-works, 3-6 nodes. title(≤26), subtitle(≤50), steps([{title ≤22, sub ≤40}]), footer(≤48).
 - terminal  — a command typed + output lines. caption, accent, command(≤56, no leading $), outputs(≤4 lines ≤48; prefix "✓ " for success).
+- quote     — a pull-quote. text(≤140), by(≤40, who said it or the product name), accent.
+- chapter   — a numbered section. number (filled in for you), title(≤44), body(≤150, 1-2 sentences), accent.
+- rank      — one countdown item. rank ("5" … "1"), title(≤40), sub(≤90, why it matters), accent.
+- teaser    — trailer opener. lines (2-4 very short lines ≤34 chars, shown one at a time; the last is the payoff).
 - cta       — closing card. name, url(≤48, no https://), tagline(≤60, e.g. "Open source · MIT"), line(≤44, final punchline), accent.
 """
 
@@ -55,7 +63,7 @@ Reply with ONLY a JSON object, no prose, no markdown fences."""
 FORMAT = """{
   "name": "product/project/topic name (≤32)",
   "accent": "#RRGGBB — a bright brand-appropriate accent that reads on near-black",
-  "scenes": [ {"type": "hook", ...}, ..., {"type": "cta", ...} ],
+  "scenes": [ {"type": "<first scene of the STRUCTURE>", ...}, ..., {"type": "cta", ...} ],
   "cover": {"kicker": "≤24 small caps line", "lines": ["≤12", "≤12", "≤12"], "accent_line": 0-2, "badge": "≤14 sticker text"}
 }"""
 
@@ -69,14 +77,15 @@ def build_prompt(inputs, source, duration, source_chars=None):
     source_chars = source_chars or _source_budget()
     n_lo, n_hi = max(3, round(duration / 7)), max(4, round(duration / 4.5))
     parts = [f"Make a {duration:.0f}-second vertical promo video storyboard.", CATALOG,
-             f"STRUCTURE: {n_lo}-{n_hi} scenes. Start with hook. End with cta. Use title right after the hook when there is a named "
-             f"product. Vary scene types; never two of the same type in a row. Scenes get timed automatically.",
+             f"About {n_lo}-{n_hi} scenes; they are timed automatically. Follow the template STRUCTURE below.",
              "OUTPUT FORMAT:\n" + FORMAT]
     if inputs.get('topic'): parts.append(f"TOPIC / ANGLE: {inputs['topic']}")
     if inputs.get('description'): parts.append(f"DESCRIPTION FROM THE USER:\n{inputs['description']}")
     t = tpl.get(inputs.get('template'))
-    parts.append(f"VISUAL TEMPLATE: {t['name']}. {t['description']}\nWrite in this tone: {t['tone']}\n"
-                 f"When the material supports it, favour these scene types: {', '.join(t['prefer'])}.")
+    from .blueprints import blueprint_text
+    has_numbers = bool(source and any(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (source.get('facts') or {}).values()))
+    parts.append(f"TEMPLATE: {t['name']}, a {t['format'].lower()}. {t['description']}\nWrite in this tone: {t['tone']}")
+    parts.append(blueprint_text(inputs.get('template'), duration, has_numbers or bool(re.search(r'\d', (source or {}).get('text', '')[:4000]))))
     if inputs.get('accent'): parts.append(f"Use accent colour {inputs['accent']}.")
     elif not t['accent_free']: parts.append(f"The template sets the colours; put \"{t['accent']}\" as accent.")
     if source:
@@ -104,6 +113,9 @@ def _sanitize_scene(sc):
         t = spec[0]
         if t == 's': out[k] = _s(v, spec[1])
         elif t == 'b': out[k] = bool(v)
+        elif t == 'i':
+            try: out[k] = int(v)
+            except (TypeError, ValueError): pass
         elif t == 'l':
             if isinstance(v, str): v = v.split('\n')
             lst = [str(x).rstrip()[:spec[1]] for x in v][:spec[2]]
@@ -132,6 +144,9 @@ def _sanitize_scene(sc):
     if kind == 'terminal' and not out.get('command'): return None
     if kind == 'statement' and not out.get('text'): return None
     if kind == 'hook' and not out.get('big'): return None
+    if kind in ('quote',) and not out.get('text'): return None
+    if kind in ('chapter', 'rank') and not out.get('title'): return None
+    if kind == 'teaser' and not out.get('lines'): return None
     return out
 
 
@@ -152,10 +167,12 @@ def sanitize(sb, inputs=None, source=None):
     # no back-to-back duplicates
     dedup = []
     for s in scenes:
-        if dedup and dedup[-1]['type'] == s['type'] and s['type'] != 'statement': continue
+        if dedup and dedup[-1]['type'] == s['type'] and s['type'] not in ('statement', 'rank', 'chapter', 'quote'): continue
         dedup.append(s)
     scenes = dedup
-    if not scenes or scenes[0]['type'] != 'hook':
+    from .blueprints import OPENING
+    opener = OPENING[tpl.get(template)['blueprint']]
+    if not scenes or (opener == 'hook' and scenes[0]['type'] != 'hook'):
         scenes.insert(0, {'type': 'hook', 'kicker': 'Meet', 'big': _s(name, 16), 'punch': _s(inputs.get('topic') or '', 34)})
     url = (source or {}).get('url') or ''
     if scenes[-1]['type'] != 'cta':
@@ -187,7 +204,17 @@ def sanitize(sb, inputs=None, source=None):
 def plan_with_llm(inputs, source):
     duration = float(inputs.get('duration') or 45)
     raw = llm.complete_json(SYSTEM, build_prompt(inputs, source, duration), max_tokens=5000)
-    return sanitize(raw, inputs, source)
+    from .blueprints import material
+    return restructure(sanitize(raw, inputs, source), inputs, source, material(inputs, source))
+
+
+def restructure(sb, inputs=None, source=None, m=None):
+    """Fit a storyboard to its template's structure (opening, order, counts, numbering)."""
+    from .blueprints import conform
+    inputs = inputs or {}
+    scenes = conform(sb['scenes'], sb['template'], sb['duration'], sb['name'], sb.get('url', ''), m)
+    keep = {k: v for k, v in sb.items() if k != 'scenes'}
+    return sanitize({**keep, 'scenes': scenes}, inputs, source)
 
 
 def _sentences(text):
@@ -214,65 +241,14 @@ def _product_name(inputs, src):
 
 
 def plan_heuristic(inputs, source):
-    """No-LLM fallback: a respectable storyboard from the material alone. Nothing here is invented."""
+    """No-LLM fallback: the template's structure filled from the material alone. Nothing here is invented."""
+    from .blueprints import material, assemble
     src = source or {'text': '', 'facts': {}, 'title': '', 'url': ''}
-    text, facts = src.get('text', ''), src.get('facts', {})
-    topic = (inputs.get('topic') or '').strip()
-    product = _product_name(inputs, source)
-    sents = _sentences(inputs.get('description') or '') or ([facts['description']] if facts.get('description') else []) or _sentences(text)[:4]
-    lead = sents[0] if sents else ''
-    if not topic and not product and lead:      # no angle given: the first sentence becomes the angle
-        topic = lead.rstrip('.!?'); sents = sents[1:]; lead = sents[0] if sents else ''
-    name = _s(product or _clause(topic, 32) or 'Untitled', 32)
-
-    GENERIC = r'licen[cs]e|contribut|install|table of contents|credits|acknowledg|^what |^why |overview|introduction|usage|quick ?start|getting started|features?$|development|faq|roadmap|support|changelog|example|demo|requirements|docker|cli$|how it works|keys|privacy|settings|testing'
-    def section_heads(level_re, body):
-        return [h.strip('# ').strip() for h in re.findall(level_re, body, re.M)]
-    feat = re.search(r'^## +features?\b.*?$(.*?)(?=^## |\Z)', text, re.M | re.S | re.I)
-    heads = section_heads(r'^### .+$', feat.group(1)) if feat else []
-    if len(heads) < 2: heads = section_heads(r'^### .+$', text)
-    if len(heads) < 2: heads = section_heads(r'^## .+$', text)
-    heads = [h for h in heads if 3 < len(h) <= 40 and not re.search(GENERIC, h, re.I)]
-    code = re.findall(r'```(\w*)\n(.*?)```', text, re.S)
-    other = next(((lang, b) for lang, b in code if lang not in ('bash', 'sh', 'shell', 'console', 'zsh', '', 'text')), None)
-
-    big = name if len(name) <= 16 else name.split()[0][:16]
-    if product and topic:
-        hook = {'type': 'hook', 'kicker': _clause(topic, 60), 'big': big}
-    elif product:
-        hook = {'type': 'hook', 'kicker': 'Meet', 'big': big, 'punch': _clause(re.sub(r'^' + re.escape(product) + r'\s+', '', lead), 34)}
-    else:
-        words = topic.split()
-        hook = {'type': 'hook', 'kicker': _clause(' '.join(words[:-1]), 60) if len(words) > 1 else '', 'big': _s(words[-1] if words else 'Hello', 16),
-                'punch': _clause(lead, 34)}
-    scenes = [hook]
-    if product: scenes.append({'type': 'title', 'name': name, 'tagline': _clause(lead, 70)})
-    stmt = next((x for x in sents[1:] + sents[:1] if len(x) <= 70), None) or (_clause(lead, 70) if lead else None)
-    if stmt and not (product and stmt == lead and len(sents) == 1): scenes.append({'type': 'statement', 'text': stmt})
-    if other:
-        lines = other[1].strip('\n').split('\n')[:14]
-        scenes.append({'type': 'code', 'caption': 'See it in code.', 'accent': 'code', 'language': other[0] or 'code',
-                       'filename': f'example.{other[0] or "txt"}', 'lines': lines})
-    items = [{'title': h} for h in heads[:5]] if len(heads) >= 2 else \
-        [{'title': _clause(x, 40)} for x in sents if x != stmt and x != lead][:4]
-    if len(items) >= 2:
-        scenes.append({'type': 'bullets', 'caption': "What's inside" if heads else 'Why it matters', 'accent': 'inside matters',
-                       'items': items, 'checks': True})
-    nums = [(k, v) for k, v in facts.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0]
-    if nums:
-        def fmt(v): return f"{v / 1000:.1f}k".replace('.0k', 'k') if v >= 1000 else str(v)
-        scenes.append({'type': 'stats', 'caption': 'By the numbers', 'items': [{'value': fmt(v), 'label': k} for k, v in nums[:3]]})
-    shell_lines = [l.strip().lstrip('$ ').strip() for lang, b in code if lang in ('bash', 'sh', 'shell', 'console', 'zsh', '')
-                   for l in b.split('\n') if l.strip() and not l.strip().startswith('#')]
-    runners = r'^(npx|npm (run|start|i|install)|pip install|pipx|uvx|docker (run|compose)|brew install|cargo (run|install)|go (run|install)|node |python3? |deno |bun )'
-    devtool = r'\b(test|lint|typecheck|format|prettier|eslint|dev:|build)\b'
-    cmds = [c for c in shell_lines if len(c) <= 56 and re.match(runners, c) and not re.search(devtool, c)] \
-        or [c for c in shell_lines if len(c) <= 56 and not re.search(devtool, c)]
-    if cmds:
-        scenes.append({'type': 'terminal', 'caption': 'Try it now.', 'accent': 'now', 'command': cmds[0]})
-    tag = ' · '.join(str(x) for x in (facts.get('license'), facts.get('language')) if x)
-    scenes.append({'type': 'cta', 'name': name, 'url': src.get('url', ''), 'tagline': tag,
-                   'line': _clause(topic, 44) if topic and product else 'Link in bio.'})
+    m = material(inputs, source)
+    name, topic, product = m['name'], m['topic'], m['product']
+    template = tpl.resolve_id(inputs.get('template'))
+    duration = float(inputs.get('duration') or 45)
+    scenes = assemble(m, template, duration)
     from .engine.scenes import split_name
     a, b = split_name(name)
     def chunk(txt, n=3, width=12):
@@ -284,7 +260,8 @@ def plan_heuristic(inputs, source):
         return out if len(out) <= n else chunk(txt, n, width + 4)
     lines = chunk(name) if ' ' in name else ([a, b] if b else [name])
     cover = {'kicker': _clause(topic, 26) if product else '', 'lines': lines[:3], 'accent_line': min(1, len(lines[:3]) - 1)}
-    return sanitize({'name': name, 'topic': topic, 'scenes': scenes, 'cover': cover}, inputs, src)
+    sb = sanitize({'name': name, 'topic': topic, 'template': template, 'scenes': scenes, 'cover': cover}, inputs, src)
+    return restructure(sb, inputs, src, m)
 
 
 def plan(inputs, source, use_llm=True):

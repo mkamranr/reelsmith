@@ -16,10 +16,11 @@ def allocate(scene_dicts, total, beat=BEAT):
     then distributes time proportionally to each scene's ideal length and snaps cuts to the beat grid."""
     scenes = [s for s in scene_dicts if s.get('type') in REGISTRY]
     if not scenes: raise ValueError('storyboard has no usable scenes')
-    budgets = [REGISTRY[s['type']].budget(s) for s in scenes]
+    pace = getattr(TH, 'pace', 1.0)                      # Pop cuts faster, Minimal holds longer
+    budgets = [tuple(v * pace for v in REGISTRY[s['type']].budget(s)) for s in scenes]
 
     # drop from the middle (keep first + last) until minimums fit
-    drop_order = ['statement', 'terminal', 'stats', 'title', 'bullets', 'steps', 'features', 'code']
+    drop_order = ['statement', 'quote', 'terminal', 'stats', 'title', 'bullets', 'steps', 'features', 'chapter', 'rank', 'code', 'teaser']
     while sum(b[0] for b in budgets) > total and len(scenes) > 2:
         idx = None
         for kind in drop_order:

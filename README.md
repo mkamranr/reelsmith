@@ -47,10 +47,10 @@ for Instagram, Facebook and YouTube.
 
 - **From a link or a sentence.** Reads GitHub repos (README plus stars, forks, language, licence), Hugging Face
   models and datasets, or any web page. A topic or description on its own works too.
-- **Six templates** with their own look, motion, music and writing tone: Midnight, Editorial, Terminal, Pop, Minimal
-  and Aurora. Pick one per video; any storyboard works with any template.
-- **Ten scene types**, all data-driven: hook, title, code typing, statement, bullet cards, feature panels, counting
-  stats, a how-it-works pipeline, terminal and closing card. Text wraps and shrinks to fit, so model output can't overflow.
+- **Six templates, six kinds of video.** Each has its own story structure (product demo, feature story, README
+  walkthrough, countdown listicle, keynote, launch trailer) as well as its own look, motion, music and writing tone.
+- **Fourteen scene types**, all data-driven: hook, title, code typing, statement, bullet cards, feature panels, counting
+  stats, a how-it-works pipeline, terminal, pull-quote, numbered chapter, countdown item, trailer teaser and closing card. Text wraps and shrinks to fit, so model output can't overflow.
 - **Sound that's in sync by construction.** Each scene registers its sound effects from the same timings that drive
   its animation. A 120 BPM music bed is arranged around the plan, and cuts snap to the beat.
 - **Voice-over (optional).** The language model writes a line per scene sized to the scene; any OpenAI-compatible
@@ -74,20 +74,32 @@ for Instagram, Facebook and YouTube.
   <img src="docs/templates.jpg" alt="The same scene rendered in six templates: Midnight, Editorial, Terminal, Pop, Minimal and Aurora" width="100%">
 </p>
 
-A template is a whole identity, not just a colour scheme:
+Each template is a different kind of video, not a colour scheme over the same one. It sets the story structure the
+planner must follow, the composition, the pacing, the look and the sound:
 
-| Template | Look | Motion and sound | Writing tone |
-|---|---|---|---|
-| **Midnight** | dark navy, amber accent, faint grid, Inter | zoom and push cuts, 120 BPM synth pad | confident, developer-friendly |
-| **Editorial** | paper-light pages, Fraunces serif headlines, red accent, thin rules | page-turn slides, 90 BPM soft plucks, gentle effects | considered, magazine-like |
-| **Terminal** | black CRT with scanlines, all JetBrains Mono, phosphor glow, square corners | glitch cuts, 128 BPM chiptune arpeggios | terse and technical |
-| **Pop** | cream with big colour shapes that change every scene, thick outlines, hard shadows, Bricolage Grotesque | bouncy cuts, 128 BPM claps and stabs | playful and punchy |
-| **Minimal** | near-white, light-weight type, soft shadows, blue accent | quiet crossfades, 100 BPM airy pad, soft effects | calm and premium |
-| **Aurora** | deep violet with moving gradient light, frosted-glass cards, Space Grotesk | dissolves, 110 BPM lush pad with shimmer | visionary launch |
+| Template | Format | Structure | Look | Motion and sound |
+|---|---|---|---|---|
+| **Midnight** | product demo | hook with pains → title → code → features → stats → how it works → command → CTA | dark navy, amber, faint grid | zoom cuts, 120 BPM synth pad |
+| **Editorial** | feature story | pull-quote cold open → headline → chapters I, II, III… → by the numbers → closing quote → CTA | paper-light, Fraunces serif, red accent, left-aligned | page-turn slides, 90 BPM soft plucks |
+| **Terminal** | README walkthrough | opening command → code → pipeline → command with output → numbers → CTA | black CRT, scanlines, all monospace, phosphor glow, left-aligned | glitch cuts, 128 BPM chiptune |
+| **Pop** | countdown listicle | question hook → countdown 5…1 (3 to 7 items by length) → punchline → CTA | cream, big colour shapes, thick outlines, hard shadows | bouncy cuts, claps and stabs |
+| **Minimal** | keynote | calm title → one statement at a time → feature panels → one number → CTA | near-white, light type, soft shadows | crossfades, airy pad, quiet effects |
+| **Aurora** | launch trailer | letterboxed teaser lines → title reveal → features → numbers → vision line → CTA | deep violet, moving gradient light, frosted glass | dissolves, lush pad with shimmer |
 
-The template also steers the planner: its tone goes into the prompt, along with the scene types that suit it (Terminal
-leans on code and commands, Editorial on statements and numbers). Pick one in the web app's **Template** picker, which
-shows a live preview of each, or with `--template` on the command line (`reelsmith templates` lists them).
+How the structure is applied:
+
+- The planner is given the template's structure, scaled to the length (a 30 s countdown gets 5 items, a 20 s one 4).
+- Whatever comes back is then **conformed**: scene types the template doesn't use are re-expressed in its own
+  vocabulary (a bullet list becomes countdown items for Pop, chapters for Editorial, feature panels for Aurora), the
+  template's opening scene and order are enforced, and countdowns and chapters are numbered. So the structure holds
+  even with a model that ignores instructions, and the built-in planner (no model) builds every structure too.
+- Pacing follows from the structure: a 30 s Pop video has about eight scenes, a 30 s Minimal one about four.
+- To restyle an existing storyboard, `reelsmith render storyboard.json --template pop --restructure` (or tick
+  **rebuild the story in its structure** under the storyboard editor) rebuilds it in the new template's structure.
+  Without `--restructure`, the story stays as it is and only the look changes.
+
+Pick a template in the web app's **Template** picker, which shows each one's signature scene, or with `--template`
+on the command line (`reelsmith templates` lists them).
 
 **Accent colour:** a colour you choose always wins and stays if you switch templates. Otherwise Midnight lets the
 planner pick an accent to suit the content, and every other template keeps its designed palette.
@@ -217,6 +229,7 @@ reelsmith generate --url https://github.com/owner/repo --upscale 4k            #
 reelsmith plan --url https://github.com/owner/repo -o storyboard.json          # plan only, then edit it
 reelsmith render storyboard.json
 reelsmith render storyboard.json --template pop                                # same story, another look
+reelsmith render storyboard.json --template pop --restructure                  # rebuilt as Pop's countdown
 ```
 
 Add `--no-llm` to use the built-in planner, `--workers N` to limit CPU use and `-o DIR` to choose the output folder.
@@ -277,6 +290,10 @@ The planner (or you) writes a storyboard; the engine handles timing and layout.
 | `stats` | `caption`, `accent`, `subtitle`, `items` (`[{value, label}]`); numbers count up |
 | `steps` | `title`, `subtitle`, `steps` (`[{title, sub}]`), `footer` |
 | `terminal` | `caption`, `accent`, `command`, `outputs` (prefix `✓ ` for green lines) |
+| `quote` | `text`, `by`, `accent` |
+| `chapter` | `number` (numbered for you), `title`, `body`, `accent` |
+| `rank` | `rank`, `of` (both numbered for you), `title`, `sub`, `accent` |
+| `teaser` | `lines` (2–4 short lines, shown one at a time in letterbox) |
 | `cta` | `name`, `url`, `tagline`, `line`, `accent` |
 
 `template` is any of the six ids. Scenes are fitted to `duration` with cuts on the template's beat. If the minimums don't fit, lower-priority middle scenes are
@@ -368,6 +385,7 @@ reelsmith/
   sources.py                          GitHub / Hugging Face / web page reader
   llm.py, config.py                   language-model client and saved settings
   storyboard.py, captions.py          planning, validation, captions
+  blueprints.py                       each template's story structure: prompt, conforming, built-in planner
   tts.py, narration.py                voice settings, TTS client, narration writing and fitting
   engine/
     templates.py                      the six templates: palette, type, shape, background, motion, music, tone

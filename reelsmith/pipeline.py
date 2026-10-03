@@ -71,6 +71,9 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
         log(f"  planned by {how}: {' → '.join(s['type'] for s in sb['scenes'])}")
     else:
         sb = sbmod.sanitize(storyboard, inputs, {'url': storyboard.get('url', '')} if storyboard.get('url') else None)
+        if inputs.get('restructure'):
+            sb = sbmod.restructure(sb, inputs)
+            log(f"Restructured for the {sb['template']} template: {' → '.join(x['type'] for x in sb['scenes'])}")
         how = 'provided'
 
     job = os.path.join(out_root, f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(sb['name'])}")

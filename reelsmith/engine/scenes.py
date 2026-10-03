@@ -68,10 +68,12 @@ def _layout_t(tid, s, size, weight, max_w, max_lines, track_em):
 
 
 def headline(c, s, accent, cx, y, size, p, weight=800, max_w=960, max_lines=2, track_em=-0.025, lh=1.12,
-             rgb=None, align='c'):
+             rgb=None, align=None):
     """Wrapped, auto-shrunk headline; words that appear in `accent` get the accent gradient.
     Returns (font_size, n_lines) so callers can stack things below it."""
     if not s: return size, 0
+    align = align or TH.align
+    if align == 'l' and cx == 540: cx = TH.margin               # left-aligned templates start at the margin
     size, lines = _layout(s, size, weight, max_w, max_lines, track_em)
     f = I(weight, size); tr = track_em * size * TH.track
     acc = {_norm(w) for w in (accent or '').split() if _norm(w)}
@@ -96,8 +98,10 @@ def headline_height(s, size, weight=800, max_w=960, max_lines=2, track_em=-0.025
     return sz * lh * len(lines)
 
 
-def para(c, s, cx, y, size, p, rgb=None, weight=500, max_w=940, max_lines=2, align='c', lh=1.3):
+def para(c, s, cx, y, size, p, rgb=None, weight=500, max_w=940, max_lines=2, align=None, lh=1.3):
     if not s: return 0
+    align = align or TH.align
+    if align == 'l' and cx == 540: cx = TH.margin
     rgb = TH.muted if rgb is None else rgb
     sz, lines = fit_block(s, 'inter', weight, max_w, size, max_lines, min_size=20)
     f = I(weight, sz)
@@ -435,7 +439,7 @@ class Statement(Scene):
         k = 0; sp = tw(' ', f)
         for li, ln in enumerate(self.lines):
             y = y0 + li * self.size * 1.12
-            x = 540 - tw(ln, f, tr) / 2
+            x = TH.margin if TH.align == 'l' else 540 - tw(ln, f, tr) / 2
             for w in ln.split(' '):
                 ww = tw(w, f, tr)
                 tt = 0.1 + k * self.reveal / max(1, self.words)
@@ -782,4 +786,172 @@ class CTA(Scene):
         headline(c, S(self.d, 'line'), S(self.d, 'accent'), 540, y + 50, 56, prog(t, 1.6, 2.1), 800, max_lines=2)
 
 
-REGISTRY = {cls.kind: cls for cls in (Hook, Title, Code, Statement, Bullets, Features, Stats, Steps, Terminal, CTA)}
+# ============================== 11. QUOTE ==============================
+class Quote(Scene):
+    """A pull-quote: giant quotation mark, the quote revealed line by line, an attribution rule."""
+    kind = 'quote'
+
+    @staticmethod
+    def budget(d):
+        n = len(S(d, 'text').split())
+        return 3.0, clamp(2.4 + n * 0.24, 3.8, 7.5)
+
+    def setup(self):
+        self.text = S(self.d, 'text')
+        self.size, self.lines = _layout(self.text, 92, 700, 900, 6, -0.02)
+        self.reveal = clamp(0.35 * len(self.lines), 0.6, 1.6)
+
+    def sounds(self):
+        self.at(0.0, 'swish', 0.5)
+        for i in range(len(self.lines)): self.at(0.35 + i * self.reveal / max(1, len(self.lines)), 'tick', 0.25)
+        if S(self.d, 'by'): self.at(0.5 + self.reveal, 'chime', 0.45, notes=(0, 7))
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 960, 1.0 + 0.05 * e_io3(prog(t, 0, self.dur)))
+        left = TH.align == 'l'
+        bh = 230 + self.size * 1.12 * len(self.lines) + (110 if S(self.d, 'by') else 0)
+        top = 960 - bh / 2
+        x = TH.margin if left else 540
+        pm = e_out5(prog(t, 0.0, 0.5))
+        qf = I(800, 420)
+        with xf(c, 0, 0, lerp(0.6, 1, e_back(prog(t, 0.0, 0.5))), 0, x + (90 if left else 0), top + 120):
+            text(c, '\u201c', x - (8 if left else 0), top + 300, qf, TH.acc, 0.95 * pm, 'l' if left else 'c')
+        n = len(self.lines)
+        p = prog(t, 0.3, 0.3 + self.reveal) * 1.0
+        headline(c, self.text, S(self.d, 'accent'), 540, top + 230 + self.size * 0.8, self.size, p, 700, max_w=900, max_lines=6, track_em=-0.02)
+        by = S(self.d, 'by')
+        if by:
+            pb = e_out5(prog(t, 0.45 + self.reveal, 0.9 + self.reveal))
+            yb = top + 230 + self.size * 1.12 * n + 60
+            w = 70 * pb
+            if left: rrect(c, x, yb - 8, w, 4, 2, TH.acc)
+            else: rrect(c, 540 - w / 2, yb - 8, w, 4, 2, TH.acc)
+            fb = M(700, fit_size(by.upper(), 'mono', 700, 820, 26, 16, track_em=0.12))
+            text(c, by.upper(), (x + 90) if left else 540, yb + 2, fb, TH.muted, pb, 'l' if left else 'c', track=3)
+
+
+# ============================== 12. CHAPTER ==============================
+class Chapter(Scene):
+    """A numbered section: huge numeral, title, body. Editorial uses roman numerals, Minimal 01/02."""
+    kind = 'chapter'
+
+    @staticmethod
+    def budget(d):
+        n = len(S(d, 'body').split()) + len(S(d, 'title').split())
+        return 3.2, clamp(3.0 + n * 0.16, 4.2, 7.5)
+
+    def sounds(self):
+        self.at(0.05, 'swish', 0.55); self.at(0.3, 'tick', 0.5)
+        self.at(0.45, 'impact', 0.35); self.shake(0.45, 3, 0.2)
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 960, 1.0 + 0.03 * prog(t, 0, self.dur))
+        left = TH.align == 'l'
+        x = TH.margin if left else 540
+        num = S(self.d, 'number') or str(self.index)
+        ns = fit_size(num, 'inter', 800, 900, 380, 120)
+        pn = prog(t, 0.0, 0.55)
+        f = I(800, ns)
+        c.save(); c.clipRect(skia.Rect.MakeLTRB(0, 300, W, 790))
+        text(c, num, x - 60 * (1 - e_out5(pn)) * (1 if left else 0), 760 + 120 * (1 - e_out5(pn)), f, TH.acc, clamp(pn * 2), 'l' if left else 'c', track=-ns * 0.02 * TH.track)
+        c.restore()
+        pr = e_out5(prog(t, 0.25, 0.75))
+        if left: rrect(c, x, 812, 900 * pr, 3, 1.5, TH.border if TH.light else TH.muted, 0.9)
+        else: rrect(c, 540 - 300 * pr, 812, 600 * pr, 3, 1.5, TH.border if TH.light else TH.muted, 0.9)
+        ti = S(self.d, 'title')
+        headline(c, ti, S(self.d, 'accent'), 540, 920, 84, prog(t, 0.35, 0.85), 800, max_lines=2)
+        y = 920 + headline_height(ti, 84) - 20
+        para(c, S(self.d, 'body'), 540, y + 30, 40, prog(t, 0.6, 1.1), max_lines=5, max_w=900)
+
+
+# ============================== 13. RANK (countdown item) ==============================
+class Rank(Scene):
+    """One item of a countdown listicle: a big numbered sticker, the item, a line of why."""
+    kind = 'rank'
+
+    @staticmethod
+    def budget(d): return 2.4, 3.4
+
+    def sounds(self):
+        self.at(0.02, 'impact', 0.75); self.shake(0.05, 9, 0.3)
+        self.at(0.05, 'pop', 0.7, f=420)
+        self.at(0.38, 'swish', 0.45)
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 960, 1.0 + 0.03 * prog(t, 0, self.dur))
+        rank = S(self.d, 'rank') or str(self.index)
+        of = self.d.get('of')
+        ps = prog(t, 0.0, 0.45)
+        if ps > 0:
+            r = 200
+            with xf(c, 0, 0, max(0.001, e_back(ps, 2.4)), -8 + 4 * math.sin(t * 2.2), 540, 700):
+                shadow(c, 540 - r, 700 - r, 2 * r, 2 * r, r, 0.6, 40, 20)
+                c.drawCircle(540, 700, r, paint(TH.acc))
+                c.drawCircle(540, 700, r, paint(TH.border if TH.shadow == 'hard' else (255, 255, 255), 1 if TH.shadow == 'hard' else 0.25, stroke=6 * TH.border_w))
+                fs = fit_size(rank, 'inter', 900, r * 1.5, 250, 80)
+                f = I(900, fs); m = f.getMetrics()
+                text(c, rank, 540, 700 - (m.fAscent + m.fDescent) / 2, f, TH.ink, 1, 'c', track=-fs * 0.03)
+        ti = S(self.d, 'title')
+        pt = prog(t, 0.3, 0.7)
+        if pt > 0:
+            with xf(c, 0, 0, lerp(1.25, 1, e_out5(pt)), 0, 540, 1080):
+                headline(c, ti, S(self.d, 'accent'), 540, 1060, 96, min(1.0, pt * 2), 900, max_lines=2, align='c')
+        y = 1060 + headline_height(ti, 96, 900) - 20
+        para(c, S(self.d, 'sub'), 540, y + 30, 40, prog(t, 0.6, 1.1), max_lines=3, align='c')
+        if isinstance(of, int) and 1 < of <= 10:                     # countdown dots
+            try: cur = int(re.sub(r'\D', '', rank) or 0)
+            except ValueError: cur = 0
+            for k in range(of):
+                n = of - k
+                on = n == cur; done = n > cur
+                cx = 540 + (k - (of - 1) / 2) * 44
+                circle(c, cx, 1640, 11 if on else 8, TH.acc if on else TH.muted, 1 if on else (0.85 if done else 0.35))
+
+
+# ============================== 14. TEASER (trailer lines) ==============================
+class Teaser(Scene):
+    """Cinematic opener: letterbox bars, one short line at a time, the last one in the accent."""
+    kind = 'teaser'
+
+    @staticmethod
+    def budget(d):
+        n = max(1, len(d.get('lines') or []))
+        return 1.2 * n + 0.6, 1.6 * n + 0.9
+
+    def setup(self):
+        self.lines = [str(l) for l in (self.d.get('lines') or [])][:4] or [S(self.d, 'text') or '']
+        n = len(self.lines)
+        self.slot = (self.dur - 0.5) / n
+
+    def sounds(self):
+        n = len(self.lines)
+        for i in range(n):
+            t0 = 0.25 + i * self.slot
+            if i == n - 1:
+                if n > 1: self.at(t0 - 1.0, 'riser', 0.6, dur=1.0)
+                self.at(t0, 'boom', 0.8); self.shake(t0, 8, 0.4)
+            else:
+                self.at(t0, 'impact', 0.5)
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 960, 1.0 + 0.04 * prog(t, 0, self.dur), )
+        c.drawRect(skia.Rect.MakeWH(W, H), paint((0, 0, 0), 0.28 * prog(t, 0, 0.4)))
+        n = len(self.lines)
+        for i, ln in enumerate(self.lines):
+            t0 = 0.25 + i * self.slot; t1 = t0 + self.slot
+            last = i == n - 1
+            pin = prog(t, t0, t0 + 0.45)
+            pout = 0 if last else prog(t, t1 - 0.3, t1)
+            a = e_out3(pin) * (1 - pout)
+            if a <= 0.003: continue
+            size, lines = _layout(ln, 124, 800, 960, 3, -0.03)
+            with xf(c, 0, 0, lerp(1.1, 1, e_out5(pin)) * (1 + 0.04 * pout), 0, 540, 960), layer(c, a):
+                hh = size * 1.1 * len(lines)
+                headline(c, ln, ln if last else '', 540, 960 - hh / 2 + size * 0.8, 124, 1.0, 800, max_lines=3, track_em=-0.03, align='c')
+        bar = 230 * e_out5(prog(t, 0, 0.5))                           # letterbox
+        c.drawRect(skia.Rect.MakeXYWH(0, 0, W, bar), paint((0, 0, 0), 0.92))
+        c.drawRect(skia.Rect.MakeXYWH(0, H - bar, W, bar), paint((0, 0, 0), 0.92))
+
+
+REGISTRY = {cls.kind: cls for cls in (Hook, Title, Code, Statement, Bullets, Features, Stats, Steps, Terminal, CTA,
+                                      Quote, Chapter, Rank, Teaser)}

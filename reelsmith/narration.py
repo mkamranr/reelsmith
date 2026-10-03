@@ -202,6 +202,10 @@ def write_heuristic(sb, plan, sl):
         elif k == 'steps': t = 'Here is how it works: ' + ', then '.join(st.get('title', '') for st in s.get('steps', [])[:4]) + '.'
         elif k == 'code': t = s.get('caption') or 'Here it is in code.'
         elif k == 'terminal': t = (s.get('caption') or 'Try it now') + '. One command and you are done.'
+        elif k == 'quote': t = s.get('text', '')
+        elif k == 'chapter': t = f"{s.get('title', '')}. {s.get('body', '')}"
+        elif k == 'rank': t = f"Number {s.get('rank', '')}: {s.get('title', '')}."
+        elif k == 'teaser': t = ' '.join(s.get('lines') or [])
         elif k == 'cta': t = f"{s.get('line') or 'Check it out'}. Link in the description."
         else: t = ''
         out.append(_trim_words(clean(t), w))

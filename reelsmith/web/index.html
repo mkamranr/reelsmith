@@ -348,6 +348,8 @@
       <h2>Storyboard</h2>
       <p class="hint">Edit any text, reorder scenes or change the accent, then render. The engine fits text and timing for you.</p>
       <textarea id="sb" spellcheck="false" aria-label="Storyboard JSON"></textarea>
+      <label class="check"><input type="checkbox" id="sb-retemplate"> Use the template picked above and rebuild the story in its structure
+        <small>e.g. turn this into Pop's countdown or Editorial's chapters</small></label>
       <div class="actions"><button class="btn primary" id="render-btn" type="button">Render this storyboard</button></div>
     </div>
 
@@ -493,7 +495,8 @@ async function start(path, body) {
 function make() { start('/api/generate', brief()); }
 function renderSb() {
   let sb; try { sb = JSON.parse($('sb').value); } catch (e) { $('err').textContent = `The storyboard isn't valid JSON: ${e.message}`; return; }
-  start('/api/render', { storyboard: sb, quality, ...upOpts(), ...voOpts(), handle: $('handle').value.trim(), duration: sb.duration });
+  const re = $('sb-retemplate').checked ? { template, restructure: true } : {};
+  start('/api/render', { storyboard: sb, quality, ...upOpts(), ...voOpts(), ...re, handle: $('handle').value.trim(), duration: sb.duration });
 }
 
 function showStatus(j, text) {

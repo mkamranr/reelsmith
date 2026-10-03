@@ -391,6 +391,10 @@ class TestTemplates(unittest.TestCase):
         from reelsmith.engine import templates as T
         sb = json.load(open(os.path.join(os.path.dirname(__file__), '..', 'examples', 'carousel-crafter.json')))
         sb['scenes'].insert(4, {'type': 'bullets', 'caption': 'Why', 'checks': True, 'items': [{'title': 'A'}, {'title': 'B'}]})
+        sb['scenes'][5:5] = [{'type': 'quote', 'text': 'A post should never silently look wrong.', 'by': 'The README'},
+                             {'type': 'chapter', 'number': 'II.', 'title': 'The editor', 'body': 'Markdown on the left, slides on the right.'},
+                             {'type': 'rank', 'rank': '3', 'of': 5, 'title': 'Captions', 'sub': 'Written for you'},
+                             {'type': 'teaser', 'lines': ['Every frame.', 'Drawn in code.']}]
         surf = skia.Surface(270, 480)
         for tid in T.TEMPLATES:
             tl = Timeline({**sb, 'template': tid})
@@ -430,6 +434,55 @@ class TestTemplates(unittest.TestCase):
             ac = np.correlate(low, low, 'full')[len(low) - 1:]; lags = np.arange(len(ac)) / (audio.SR / 100)
             ok = (lags > 60 / 160) & (lags < 60 / 70)
             self.assertAlmostEqual(60 / lags[ok][np.argmax(ac[ok])], st['bpm'], delta=2)
+
+
+class TestStructures(unittest.TestCase):
+    SRC = {'kind': 'github', 'url': 'github.com/o/r', 'title': 'tool', 'facts': {'stars': 120},
+           'text': 'Tool turns notes into slides.\n\n## Features\n\n### Live preview\n\nSee every slide as you type it.\n\n'
+                   '### Smart fitting\n\nText shrinks before it overflows.\n\n### Captions\n\nA caption is written for you.\n\n'
+                   '### Backgrounds\n\nGenerated from your accent.\n\n```bash\nnpx tool init\n```\n'}
+    OPENERS = {'midnight': 'hook', 'editorial': 'quote', 'terminal': 'terminal', 'pop': 'hook', 'minimal': 'title', 'aurora': 'teaser'}
+    SIGNATURE = {'editorial': 'chapter', 'pop': 'rank', 'aurora': 'teaser', 'terminal': 'terminal'}
+
+    def test_builtin_plans_follow_each_template(self):
+        from reelsmith.storyboard import plan_heuristic
+        shapes = set()
+        for tid, opener in self.OPENERS.items():
+            sb = plan_heuristic({'template': tid, 'duration': 45}, self.SRC)
+            types = [s['type'] for s in sb['scenes']]
+            self.assertEqual(types[0], opener, tid); self.assertEqual(types[-1], 'cta', tid)
+            if tid in self.SIGNATURE: self.assertIn(self.SIGNATURE[tid], types, tid)
+            shapes.add(tuple(types))
+        self.assertEqual(len(shapes), len(self.OPENERS))           # six different structures
+
+    def test_numbering(self):
+        from reelsmith.storyboard import plan_heuristic
+        pop = plan_heuristic({'template': 'pop', 'duration': 30}, self.SRC)
+        ranks = [s for s in pop['scenes'] if s['type'] == 'rank']
+        self.assertEqual([r['rank'] for r in ranks], [str(n) for n in range(len(ranks), 0, -1)])
+        self.assertTrue(all(r['of'] == len(ranks) for r in ranks))
+        ed = plan_heuristic({'template': 'editorial', 'duration': 45}, self.SRC)
+        self.assertEqual([c['number'] for c in ed['scenes'] if c['type'] == 'chapter'][:3], ['I.', 'II.', 'III.'])
+
+    def test_structure_holds_when_the_model_ignores_it(self):
+        from reelsmith import storyboard as sbm, llm
+        reply = {'name': 'tool', 'scenes': [{'type': 'hook', 'kicker': 'Still', 'big': 'stuck', 'punch': 'on slides?'},
+                 {'type': 'bullets', 'items': [{'title': 'A one'}, {'title': 'B two'}, {'title': 'C three'}]}, {'type': 'cta'}]}
+        saved = (llm.complete_json, llm.provider)
+        llm.complete_json = lambda *a, **k: json.loads(json.dumps(reply)); llm.provider = lambda *a, **k: {'kind': 'mock'}
+        try:
+            pop, _ = sbm.plan({'template': 'pop', 'duration': 30}, self.SRC)
+            ed, _ = sbm.plan({'template': 'editorial', 'duration': 30}, self.SRC)
+        finally:
+            llm.complete_json, llm.provider = saved
+        self.assertEqual([s['type'] for s in pop['scenes']], ['hook', 'rank', 'rank', 'rank', 'cta'])
+        self.assertEqual([s['type'] for s in ed['scenes']][:3], ['quote', 'chapter', 'chapter'])
+
+    def test_restructure_existing_storyboard(self):
+        from reelsmith import storyboard as sbm
+        mid = sbm.plan_heuristic({'template': 'midnight', 'duration': 30}, self.SRC)
+        pop = sbm.restructure(sbm.sanitize(mid, {'template': 'pop'}), {'template': 'pop'})
+        self.assertIn('rank', [s['type'] for s in pop['scenes']])
 
 if __name__ == '__main__':
     unittest.main()

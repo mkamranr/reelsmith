@@ -50,7 +50,8 @@ def set_accent(hex_color, acc2_hex=None):
 
 THEME_KEYS = ('light', 'bg', 'surf', 'text', 'muted', 'border', 'codebg', 'panel', 'red', 'green', 'fonts',
               'display_from', 'display_weight', 'track', 'radius', 'border_w', 'shadow', 'shadow_alpha', 'glow',
-              'bg_style', 'bg_colors', 'vignette', 'grain', 'scanlines', 'transition', 'music', 'sfx')
+              'bg_style', 'bg_colors', 'vignette', 'grain', 'scanlines', 'transition', 'music', 'sfx',
+              'align', 'margin', 'pace')
 
 
 def apply_template(tid=None, accent=None):
