@@ -81,6 +81,36 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     if source:
         with open(os.path.join(job, 'source.json'), 'w') as f: json.dump(source, f, indent=2, ensure_ascii=False)
 
+    # page scroll-through: a screenshot of the link (or the README drawn as a page), placed where the template wants it
+    from . import blueprints as bpm
+    from .engine import templates as tplmod
+    old_assets = sb.get('asset_dir')
+    if storyboard is not None and old_assets and any(x['type'] == 'scroll' for x in sb['scenes']):
+        import shutil
+        for x in sb['scenes']:
+            if x['type'] == 'scroll' and not os.path.isabs(x['image']) and os.path.exists(os.path.join(old_assets, x['image'])):
+                shutil.copy2(os.path.join(old_assets, x['image']), os.path.join(job, x['image']))
+    sb['asset_dir'] = job
+    if storyboard is None and inputs.get('url') and inputs.get('screens', True):
+        stage('capture', 0)
+        log('Capturing the page …')
+        info = None
+        try:
+            from .capture import page_image
+            info = page_image(inputs['url'], source, os.path.join(job, 'page.png'),
+                              dark=not tplmod.get(sb['template'])['light'], log=log)
+        except Exception as e:
+            log(f'  note: no page scroll-through ({e}).')
+        if info:
+            host = (source or {}).get('kind')
+            cap_text = {'github': 'See it on GitHub', 'huggingface': 'On Hugging Face'}.get(host, 'Take a look')
+            sb['scenes'] = bpm.add_scroll(sb['scenes'], sb['template'], 'page.png', info['kind'], sb.get('url', ''), cap_text)
+            ix = next(i for i, x in enumerate(sb['scenes']) if x['type'] == 'scroll')
+            log(f"  {'screenshot' if info['kind'] == 'screenshot' else 'README page'} {info['width']}×{info['height']}, "
+                f"shown after the {sb['scenes'][ix - 1]['type'] if ix else 'start'}")
+    sb['burn_captions'] = bool(inputs.get('burn_captions', True))
+    sb.pop('spoken', None)
+
     res = TARGETS[upscale]['label'] if native else ('540 × 960' if quality == 'draft' else '1080 × 1920')
     voice_track = None
     if voiceover:
@@ -88,6 +118,8 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
         plan0 = Timeline(sb).plan_summary()
         voice_track, segs = narr.build(sb, plan0, sb['duration'], s_tts, voice=voice, source=source, use_llm=use_llm,
                                        log=log, check=check)
+        if sb['burn_captions']:
+            sb['spoken'] = [{'start': x['start'], 'end': x['end'], 'text': x['text']} for x in segs]
         with open(os.path.join(job, 'narration.json'), 'w') as f:
             json.dump({'voice': voice or s_tts.get('voice'), 'model': s_tts.get('model'), 'segments': segs}, f, indent=2, ensure_ascii=False)
         with open(os.path.join(job, 'narration.srt'), 'w') as f: f.write(narr.srt(segs))

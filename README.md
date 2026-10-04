@@ -29,6 +29,7 @@ for Instagram, Facebook and YouTube.
 
 - [Features](#features)
 - [Templates](#templates)
+- [Page scroll-through](#page-scroll-through)
 - [Quick start](#quick-start)
 - [Connect a language model](#connect-a-language-model)
 - [Voice-over](#voice-over)
@@ -47,10 +48,19 @@ for Instagram, Facebook and YouTube.
 
 - **From a link or a sentence.** Reads GitHub repos (README plus stars, forks, language, licence), Hugging Face
   models and datasets, or any web page. A topic or description on its own works too.
-- **Six templates, six kinds of video.** Each has its own story structure (product demo, feature story, README
-  walkthrough, countdown listicle, keynote, launch trailer) as well as its own look, motion, music and writing tone.
-- **Fourteen scene types**, all data-driven: hook, title, code typing, statement, bullet cards, feature panels, counting
-  stats, a how-it-works pipeline, terminal, pull-quote, numbered chapter, countdown item, trailer teaser and closing card. Text wraps and shrinks to fit, so model output can't overflow.
+- **Nine templates, nine kinds of video.** Each has its own story structure (product demo, feature story, README
+  walkthrough, countdown listicle, keynote, launch trailer, mini documentary, screen tour, news segment) as well as its
+  own look, motion, music and writing tone.
+- **A scroll through the real page.** With a link, a headless browser screenshots the page in phone layout and the
+  video scrolls through it slowly inside a device frame that tilts into place.
+- **Motion that doesn't feel like slides.** Headlines enter differently from scene to scene (rise, blur, wipe, slide,
+  pop, typewriter), moving transitions get motion blur, logos get a light sweep, and each template has its own overlay
+  (news ticker, film letterbox with timecode, terminal status line) instead of a slide counter.
+- **Spoken words on screen.** With a voice-over, the narration appears word by word with the current word
+  highlighted, styled per template, because most Reels and Shorts are watched muted.
+- **Fifteen scene types**, all data-driven: hook, title, code typing, statement, bullet cards, feature panels, counting
+  stats, a how-it-works pipeline, terminal, pull-quote, numbered chapter, countdown item, trailer teaser, page
+  scroll-through and closing card. Text wraps and shrinks to fit, so model output can't overflow.
 - **Sound that's in sync by construction.** Each scene registers its sound effects from the same timings that drive
   its animation. A 120 BPM music bed is arranged around the plan, and cuts snap to the beat.
 - **Voice-over (optional).** The language model writes a line per scene sized to the scene; any OpenAI-compatible
@@ -71,7 +81,7 @@ for Instagram, Facebook and YouTube.
 ## Templates
 
 <p align="center">
-  <img src="docs/templates.jpg" alt="The same scene rendered in six templates: Midnight, Editorial, Terminal, Pop, Minimal and Aurora" width="100%">
+  <img src="docs/templates.jpg" alt="The signature scene of each of the nine templates" width="720">
 </p>
 
 Each template is a different kind of video, not a colour scheme over the same one. It sets the story structure the
@@ -85,6 +95,9 @@ planner must follow, the composition, the pacing, the look and the sound:
 | **Pop** | countdown listicle | question hook → countdown 5…1 (3 to 7 items by length) → punchline → CTA | cream, big colour shapes, thick outlines, hard shadows | bouncy cuts, claps and stabs |
 | **Minimal** | keynote | calm title → one statement at a time → feature panels → one number → CTA | near-white, light type, soft shadows | crossfades, airy pad, quiet effects |
 | **Aurora** | launch trailer | letterboxed teaser lines → title reveal → features → numbers → vision line → CTA | deep violet, moving gradient light, frosted glass | dissolves, lush pad with shimmer |
+| **Cinema** | mini documentary | teaser → title → stakes quote → parts 01, 02… → numbers → closing line → CTA | warm film grade, letterbox with timecode, light leaks, serif | slow dissolves, 76 BPM pad and bells |
+| **Showcase** | screen tour | hook → title → the page scrolling in a phone → features → numbers → get started → CTA | studio stage with key light and floor, glossy sweeps | zoom cuts with motion blur, 116 BPM plucks |
+| **Broadcast** | news segment | headline → report → the page → key facts → numbers → quote → sign-off | navy and red, "NEW" bug, running ticker, left-aligned straps | whip wipes, 124 BPM news bed |
 
 How the structure is applied:
 
@@ -98,11 +111,33 @@ How the structure is applied:
   **rebuild the story in its structure** under the storyboard editor) rebuilds it in the new template's structure.
   Without `--restructure`, the story stays as it is and only the look changes.
 
+Every template also gets its own motion: a mix of headline entrances that varies from scene to scene, motion blur
+on moving transitions, a light sweep on logos (where it suits the look), its own caption style and its own overlay.
+
 Pick a template in the web app's **Template** picker, which shows each one's signature scene, or with `--template`
 on the command line (`reelsmith templates` lists them).
 
 **Accent colour:** a colour you choose always wins and stays if you switch templates. Otherwise Midnight lets the
 planner pick an accent to suit the content, and every other template keeps its designed palette.
+
+## Page scroll-through
+
+Give a link and the video shows the page itself: a headless browser takes a screenshot in phone layout (dark mode for
+dark templates; on GitHub it starts at the repository, skipping GitHub's own navigation), and a scroll-through scene
+moves down it slowly inside a phone, browser window or card, tilting into place with real perspective. Each template
+puts it where it fits its story: after the title in the demo and the screen tour, before the countdown in Pop, after the
+report in Broadcast.
+
+It needs Playwright and Chromium. The Docker image includes them (build with `--build-arg WITH_BROWSER=0`, or set
+`REELSMITH_WITH_BROWSER=0` in `.env`, for a smaller image). Without Docker:
+
+```bash
+pip install -e ".[screenshots]" && playwright install chromium
+```
+
+or point `REELSMITH_CHROMIUM` at an existing Chrome/Chromium. Without a browser, the README is drawn as a GitHub-style
+page instead, marked "README" rather than passed off as a screenshot. The browser refuses requests to private and
+local addresses, like the link reader. Turn the scene off with **Show the page** in the brief or `--no-screens`.
 
 ## Quick start
 
@@ -199,6 +234,9 @@ How narration is made:
 2. Each line is spoken and fitted into its scene. A line that's too long is rewritten shorter, then sped up without
    changing pitch (ffmpeg `atempo`, up to 1.35×), and only trimmed with a fade as a last resort.
 3. Music and sound effects duck under the voice and come back up between lines.
+4. The spoken words appear on screen, a few at a time with the current word highlighted, in the template's caption
+   style (a pill, bold outlined pop words, film subtitles in the letterbox, a news strap…). Untick **Show the spoken
+   words on screen** or use `--no-captions` to leave them out.
 
 If the model's reply can't be used, the narration falls back to the on-screen text and the job log shows what the
 model sent. From the terminal: `reelsmith voice set --provider kokoro --base-url http://localhost:8880/v1 --voice af_heart`,
@@ -226,13 +264,14 @@ reelsmith generate --url https://github.com/owner/repo --template terminal     #
 reelsmith generate --topic "Why sourdough needs time" --description "..." --duration 30 --accent "#5BD1A9" --voiceover
 reelsmith generate --url https://example.com/post --draft                      # quick 540p preview
 reelsmith generate --url https://github.com/owner/repo --upscale 4k            # also write a 4K file
+reelsmith generate --url https://github.com/owner/repo --template showcase --voiceover   # page tour, narrated, with captions
 reelsmith plan --url https://github.com/owner/repo -o storyboard.json          # plan only, then edit it
 reelsmith render storyboard.json
 reelsmith render storyboard.json --template pop                                # same story, another look
 reelsmith render storyboard.json --template pop --restructure                  # rebuilt as Pop's countdown
 ```
 
-Add `--no-llm` to use the built-in planner, `--workers N` to limit CPU use and `-o DIR` to choose the output folder.
+Add `--no-screens` to skip the page scroll-through, `--no-captions` to keep spoken words off screen, `--no-llm` to use the built-in planner, `--workers N` to limit CPU use and `-o DIR` to choose the output folder.
 `reelsmith --help` lists everything.
 
 ## What you get
@@ -355,12 +394,24 @@ press **Play a sample** to check.
 **GitHub: no stars or licence in the facts.** The anonymous API limit (60 requests an hour) was hit and only the
 README was read. Set `GITHUB_TOKEN`.
 
+**Copy buttons do nothing when the app is opened at `http://<ip>:…`.** Browsers only allow clipboard access on
+`https://` or `localhost`. Reelsmith falls back to an older copy method, and if a browser blocks that too, the button
+says "Press Ctrl+C" with the text already selected. Serving it over HTTPS (for example behind a reverse proxy) gives the
+normal behaviour.
+
+**The page scroll-through shows the README instead of a screenshot.** No browser was found; see
+[Page scroll-through](#page-scroll-through). If the log says "screenshot failed", the page blocked headless browsers or
+took longer than 45 s to load.
+
 **After updating, nothing changed (Docker).** Rebuild the image: `docker compose up -d --build`. The startup log and
 `/api/status` show the running version.
 
 ## Security
 
-- The web app has no login. It binds to `127.0.0.1`, and Docker publishes it on the host's loopback only. It refuses
+- The web app has no login by default. It binds to `127.0.0.1`, and Docker publishes it on the host's loopback only.
+  **If you open it to other machines (`REELSMITH_BIND=0.0.0.0`), set `REELSMITH_PASSWORD`** (and optionally
+  `REELSMITH_USER`, default `reelsmith`); the browser then asks for that login. The Docker healthcheck uses `/healthz`,
+  which is open and reveals nothing. It refuses
   requests addressed to other host names or coming from other sites, so a web page open in your browser can't change
   your settings or start jobs. To use it from another device, set `REELSMITH_BIND=0.0.0.0` and
   `REELSMITH_ALLOWED_HOSTS=<ip>:5179`; anyone who can reach that port can then use your API credits, so beyond a
@@ -383,6 +434,7 @@ reelsmith/
   cli.py, server.py, pipeline.py      entry points and orchestration
   jobs.py                             persistent job queue and history
   sources.py                          GitHub / Hugging Face / web page reader
+  capture.py                          page screenshots (Playwright) and the README-as-a-page fallback
   llm.py, config.py                   language-model client and saved settings
   storyboard.py, captions.py          planning, validation, captions
   blueprints.py                       each template's story structure: prompt, conforming, built-in planner
@@ -403,7 +455,7 @@ Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License and credits
 
-[MIT](LICENSE). Bundled fonts are [Inter](https://github.com/rsms/inter),
+[MIT](LICENSE). Built-in screenshots use [Playwright](https://playwright.dev). Bundled fonts are [Inter](https://github.com/rsms/inter),
 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), [Fraunces](https://github.com/undercasetype/Fraunces),
 [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) and
 [Space Grotesk](https://github.com/floriankarsten/space-grotesk), all under the SIL Open Font License (see

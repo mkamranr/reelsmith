@@ -35,7 +35,7 @@ Reply with ONLY JSON: {"lines": ["line for scene 1", "line for scene 2", ...]}""
 def _on_screen(s):
     parts = []
     for k, v in s.items():
-        if k in ('type', 'accent', 'language', 'filename', 'callouts', 'checks', 'initials'): continue
+        if k in ('type', 'accent', 'language', 'filename', 'callouts', 'checks', 'initials', 'image', 'kind', 'of'): continue
         if isinstance(v, str) and v: parts.append(v)
         elif isinstance(v, list):
             for it in v[:6]:
@@ -202,6 +202,7 @@ def write_heuristic(sb, plan, sl):
         elif k == 'steps': t = 'Here is how it works: ' + ', then '.join(st.get('title', '') for st in s.get('steps', [])[:4]) + '.'
         elif k == 'code': t = s.get('caption') or 'Here it is in code.'
         elif k == 'terminal': t = (s.get('caption') or 'Try it now') + '. One command and you are done.'
+        elif k == 'scroll': t = "Here's the page itself." if s.get('kind') == 'screenshot' else "Here's the README."
         elif k == 'quote': t = s.get('text', '')
         elif k == 'chapter': t = f"{s.get('title', '')}. {s.get('body', '')}"
         elif k == 'rank': t = f"Number {s.get('rank', '')}: {s.get('title', '')}."

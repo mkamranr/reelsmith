@@ -24,8 +24,17 @@ ALLOWED = {
     'listicle': {'hook', 'rank', 'statement', 'stats', 'cta'},
     'keynote': {'title', 'statement', 'chapter', 'features', 'stats', 'cta'},
     'trailer': {'teaser', 'title', 'features', 'stats', 'statement', 'cta'},
+    'documentary': {'teaser', 'title', 'quote', 'chapter', 'stats', 'statement', 'cta'},
+    'tour': {'hook', 'title', 'features', 'bullets', 'stats', 'steps', 'statement', 'cta'},
+    'news': {'title', 'statement', 'bullets', 'stats', 'quote', 'steps', 'cta'},
 }
-OPENING = {'demo': 'hook', 'story': 'quote', 'walkthrough': 'terminal', 'listicle': 'hook', 'keynote': 'title', 'trailer': 'teaser'}
+for _v in ALLOWED.values(): _v.add('scroll')          # every structure can show the page
+OPENING = {'demo': 'hook', 'story': 'quote', 'walkthrough': 'terminal', 'listicle': 'hook', 'keynote': 'title', 'trailer': 'teaser',
+           'documentary': 'teaser', 'tour': 'hook', 'news': 'title'}
+# where the page scroll-through goes in each structure: after the first scene of one of these types
+SCROLL_AFTER = {'demo': ['title', 'hook'], 'story': ['title', 'quote'], 'walkthrough': ['terminal'], 'listicle': ['hook'],
+                'keynote': ['statement', 'title'], 'trailer': ['title'], 'documentary': ['title'], 'tour': ['title', 'hook'],
+                'news': ['statement', 'title']}
 ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']
 
 
@@ -47,6 +56,9 @@ def counts(bp, duration, has_numbers=True):
         return {'statement': 1 if duration < 30 else 2 if duration < 55 else 3}
     if bp == 'trailer':
         return {'teaser_lines': 3 if duration < 40 else 4}
+    if bp == 'documentary':
+        fixed = (4.0 + 4.0 + 4.5 + 5.0 + (3.5 if duration >= 45 else 0)) * pace
+        return {'chapter': _clamp(_r((duration * 0.95 - fixed) / (5.5 * pace)), 1, 4), 'teaser_lines': 3}
     return {}
 
 
@@ -90,6 +102,28 @@ def blueprint_text(template_id, duration, has_numbers=True):
         if not short: s.append('3. features: 2-4 panels.')
         if has_numbers and not short: s.append('4. stats: only real figures.')
         s += ['Then statement: the vision, one line.', 'Last. cta.']
+    elif bp == 'documentary':
+        n = c['chapter']
+        s = ['1. teaser: 2-3 short lines (≤34 chars) that open on the human problem, not the product.',
+             '2. title: the name and a one-line logline.',
+             '3. quote: a line that captures the stakes (from the material, or a sharp observation), with "by".',
+             f'4-{n + 3}. chapter × {n}: the story in parts, each a title (≤44) and 1-2 sentences.']
+        if has_numbers: s.append('Then stats: only real figures.')
+        s += ['Then statement: the closing thought, one line.', 'Last. cta.']
+    elif bp == 'tour':
+        s = ['1. hook: what the viewer is about to see.', '2. title.',
+             '(A scroll-through of the page is inserted here automatically when there is a link.)',
+             '3. features: 2-4 panels naming what is on screen, with short points.']
+        if has_numbers and not short: s.append('4. stats: only real figures.')
+        if not short: s.append('5. steps: how to get started, 3-4 steps.')
+        s.append('Last. cta.')
+    elif bp == 'news':
+        s = ['1. title: the headline (name) and the news in one line (tagline).',
+             '2. statement: the report, what happened and why it matters.',
+             '3. bullets: "Key facts", 3-4 items with a short sub each.']
+        if has_numbers: s.append('4. stats: only real figures.')
+        if not short: s.append('5. quote: a line from the material, attributed.')
+        s.append('Last. cta: the sign-off.')
     else:
         s = ['1. hook with 2-3 pains the audience recognises.', '2. title.',
              '3. code (or terminal if the material has commands but no code).']
@@ -147,6 +181,21 @@ def _convert(sc, bp):
                 return [{'type': 'teaser', 'lines': [_cap(x) for x in (first, sc.get('punch'), sc.get('answer')) if x][:4]}]
             return [{'type': 'statement', 'text': _cap(_hook_text(sc))}]
         if k in ('quote', 'teaser'): return [{'type': 'statement', 'text': sc.get('text') or ' '.join(sc.get('lines') or [])}]
+        return []
+    if bp in ('documentary', 'tour', 'news'):
+        A = ALLOWED[bp]
+        if listy or k in ('rank', 'chapter'):
+            items = _items(sc) or [(sc.get('title', ''), sc.get('sub') or sc.get('body') or '')]
+            if 'chapter' in A: return [{'type': 'chapter', 'title': a, 'body': b} for a, b in items][:4]
+            if 'features' in A: return [{'type': 'features', 'items': [{'title': a, 'subtitle': b, 'points': []} for a, b in items][:4]}]
+            return [{'type': 'bullets', 'caption': 'Key facts', 'items': [{'title': a, 'sub': b} for a, b in items][:5]}]
+        if k == 'hook':
+            if 'teaser' in A:
+                first = ' '.join(x for x in (sc.get('kicker'), sc.get('big')) if x)
+                return [{'type': 'teaser', 'lines': [_cap(x) for x in (first, sc.get('punch'), sc.get('answer')) if x][:3]}]
+            return [{'type': 'statement', 'text': _cap(_hook_text(sc))}]
+        if k == 'teaser': return [{'type': 'statement', 'text': ' '.join(sc.get('lines') or [])}]
+        if k == 'quote': return [{'type': 'statement', 'text': sc.get('text', '')}]
         return []
     if bp == 'walkthrough':
         if k == 'features': return [{'type': 'bullets', 'caption': 'What you get', 'items': [{'title': a, 'sub': b} for a, b in _items(sc)]}]
@@ -216,6 +265,19 @@ def conform(scenes, template_id, duration, name='', url='', material=None):
             if deduped and s['type'] == deduped[-1]['type'] == 'statement': continue
             deduped.append(s)
         ordered = deduped
+    elif bp == 'documentary':
+        title = next((s for s in rest if s['type'] == 'title'), {'type': 'title', 'name': name})
+        if opener.get('lines'): opener['lines'] = opener['lines'][:3]
+        chapters = [s for s in rest if s['type'] == 'chapter'][:c['chapter']]
+        for i, ch in enumerate(chapters): ch['number'] = f'{i + 1:02d}'
+        ordered = [opener, title] + [s for s in rest if s['type'] == 'quote'][:1] + chapters + \
+            _by_order([s for s in rest if s['type'] in ('stats', 'statement', 'scroll')], ['scroll', 'stats', 'statement'], {'statement': 1})
+    elif bp == 'tour':
+        title = next((s for s in rest if s['type'] == 'title'), None)
+        ordered = [opener] + ([title] if title else []) + _by_order([s for s in rest if s is not title],
+                                                                   ['scroll', 'features', 'bullets', 'stats', 'steps', 'statement'], {'statement': 1})
+    elif bp == 'news':
+        ordered = [opener] + _by_order(rest, ['statement', 'scroll', 'bullets', 'stats', 'steps', 'quote'], {'statement': 1, 'quote': 1})
     elif bp == 'walkthrough':
         ordered = [opener] + _by_order(rest, ['title', 'code', 'bullets', 'steps', 'statement', 'terminal', 'stats'], {'statement': 1, 'title': 1})
     else:
@@ -251,7 +313,9 @@ def _synth_opener(bp, scenes, name, url, m, c):
         return {'type': 'hook', 'kicker': 'Here are', 'big': str(n), 'punch': f'reasons to try {name}'[:34]}
     if bp == 'keynote':
         return {'type': 'title', 'name': name, 'tagline': lead}
-    if bp == 'trailer':
+    if bp == 'news':
+        return {'type': 'title', 'name': name, 'tagline': lead}
+    if bp in ('trailer', 'documentary'):
         bits = [b.strip() for b in re.split(r'[.,;:—-]\s+', lead) if b.strip()][:c.get('teaser_lines', 3) - 1]
         return {'type': 'teaser', 'lines': (bits or ['Something new is here.']) + ['Meet ' + name + '.']}
     return {'type': 'hook', 'kicker': 'Meet', 'big': name[:16], 'punch': ''}
@@ -367,6 +431,26 @@ def assemble(m, template_id, duration):
             if secs and duration >= 25 else []
         vision = [{'type': 'statement', 'text': later[-1]}] if later else []
         return [teaser, {'type': 'title', 'name': name, 'tagline': _clause(lead, 70)}] + feats + stats + vision + [cta]
+    if bp == 'documentary':
+        bits = [b.strip(' .') + '.' for b in re.split(r'[.,;:—]\s+', lead) if 3 < len(b.strip()) <= 34][:2]
+        teaser = {'type': 'teaser', 'lines': (bits or [_clause(topic or 'It started with a problem', 34)]) + [f'This is {name}.'[:34]]}
+        chapters = [{'type': 'chapter', 'title': _clause(a, 44), 'body': _clause(b, 150)} for a, b in secs[:c['chapter']]]
+        out = [teaser, {'type': 'title', 'name': name, 'tagline': _clause(topic or lead, 70)}]
+        if later: out.append({'type': 'quote', 'text': later[0], 'by': name})
+        return out + chapters + stats + ([{'type': 'statement', 'text': later[-1]}] if len(later) > 1 else []) + [cta]
+    if bp == 'tour':
+        feats = [{'type': 'features', 'items': [{'title': _clause(a, 24), 'subtitle': _clause(b, 60), 'points': []} for a, b in secs[:4]]}] if secs else []
+        steps = [{'type': 'steps', 'title': 'Get started', 'steps': [{'title': _clause(x, 22), 'sub': ''} for x in m['cmds'][:3]]}] \
+            if len(m['cmds']) >= 2 and duration >= 30 else []
+        hook = {'type': 'hook', 'kicker': 'Take a look at', 'big': name if len(name) <= 16 else name.split()[0][:16], 'punch': _clause(lead, 34)}
+        return [hook, {'type': 'title', 'name': name, 'tagline': _clause(topic or lead, 70)}] + feats + stats + steps + [cta]
+    if bp == 'news':
+        facts = [{'type': 'bullets', 'caption': 'Key facts', 'accent': 'Key', 'items': [{'title': _clause(a, 40), 'sub': _clause(b, 60)} for a, b in secs[:4]]}] if len(secs) >= 2 else []
+        out = [{'type': 'title', 'name': name, 'tagline': _clause(topic or lead, 70)}]
+        if lead: out.append({'type': 'statement', 'text': _clause(lead, 70)})
+        out += facts + stats
+        if later and duration >= 30: out.append({'type': 'quote', 'text': later[-1], 'by': name})
+        return out + [cta]
     # demo: the original built-in plan
     big = name if len(name) <= 16 else name.split()[0][:16]
     hook = {'type': 'hook', 'kicker': _clause(topic, 60) if topic and m['product'] else 'Meet', 'big': big,
@@ -379,3 +463,15 @@ def assemble(m, template_id, duration):
     out += stats
     if m['cmds']: out.append({'type': 'terminal', 'caption': 'Try it now.', 'accent': 'now', 'command': m['cmds'][0]})
     return out + [cta]
+
+
+def add_scroll(scenes, template_id, image, kind, url='', caption=''):
+    """Insert the page scroll-through where it fits the template's story. Replaces any existing one."""
+    bp = tpl.get(template_id)['blueprint']
+    scenes = [s for s in scenes if s['type'] != 'scroll']
+    sc = {'type': 'scroll', 'image': image, 'kind': kind, 'url': url, 'caption': caption}
+    for t in SCROLL_AFTER.get(bp, ['title']):
+        i = next((k for k, s in enumerate(scenes) if s['type'] == t), None)
+        if i is not None:
+            return scenes[:i + 1] + [sc] + scenes[i + 1:]
+    return scenes[:1] + [sc] + scenes[1:]

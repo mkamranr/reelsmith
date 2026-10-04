@@ -5,7 +5,11 @@ name: reelsmith
 
 services:
   reelsmith:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_BROWSER: ${REELSMITH_WITH_BROWSER:-1}     # 0 = smaller image, README pages instead of screenshots
+    shm_size: 1gb                                     # room for headless Chromium
     image: reelsmith:latest
     restart: unless-stopped
     environment:
@@ -18,6 +22,9 @@ services:
       REELSMITH_TTS_URL: ${REELSMITH_TTS_URL:-}
       # extra names the app may be reached by, e.g. "reels.example.com,192.168.1.20:5179" (comma separated)
       REELSMITH_ALLOWED_HOSTS: ${REELSMITH_ALLOWED_HOSTS:-}
+      # login for the web app; set it whenever REELSMITH_BIND is not 127.0.0.1
+      REELSMITH_USER: ${REELSMITH_USER:-reelsmith}
+      REELSMITH_PASSWORD: ${REELSMITH_PASSWORD:-}
       # optional: higher GitHub rate limit + repo stats
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # optional: configure the LLM from the environment instead of the Settings page

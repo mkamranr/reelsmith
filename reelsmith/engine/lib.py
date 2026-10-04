@@ -51,7 +51,7 @@ def set_accent(hex_color, acc2_hex=None):
 THEME_KEYS = ('light', 'bg', 'surf', 'text', 'muted', 'border', 'codebg', 'panel', 'red', 'green', 'fonts',
               'display_from', 'display_weight', 'track', 'radius', 'border_w', 'shadow', 'shadow_alpha', 'glow',
               'bg_style', 'bg_colors', 'vignette', 'grain', 'scanlines', 'transition', 'music', 'sfx',
-              'align', 'margin', 'pace')
+              'align', 'margin', 'pace', 'entrances', 'sweep', 'hud', 'device', 'caption_style', 'tr')
 
 
 def apply_template(tid=None, accent=None):
@@ -62,6 +62,7 @@ def apply_template(tid=None, accent=None):
     for k, v in t['syntax'].items(): setattr(TH, k, v)
     if accent: set_accent(accent)
     else: set_accent(t['accent'], t['acc2'])
+    TH.entrance_now = t['entrances'][0]
 
 
 def col(rgb, a=1.0):
@@ -171,7 +172,7 @@ def tw(s, f, track=0.0):
     return sum((fb if b else f).measureText(t) for t, b in rs) + track * (len(s) - 1)
 
 
-def text(c, s, x, y, f, rgb=None, a=1.0, align='l', track=0.0, shader=None):
+def text(c, s, x, y, f, rgb=None, a=1.0, align='l', track=0.0, shader=None, blur=None):
     if a <= 0.003 or not s: return tw(s, f, track) if s else 0
     w = tw(s, f, track)
     if align == 'c': x -= w / 2
@@ -180,7 +181,7 @@ def text(c, s, x, y, f, rgb=None, a=1.0, align='l', track=0.0, shader=None):
     if TH.glow and f.getSize() >= 30 and a > 0.05:           # phosphor glow for big type
         g = paint(TH.acc if shader is not None else rgb, a * 0.45, blur=f.getSize() * 0.12)
         _draw_str(c, s, x, y, f, g, track)
-    p = paint(rgb, a, shader=shader)
+    p = paint(rgb, a, shader=shader, blur=blur if blur and blur > 0.3 else None)
     return _draw_str(c, s, x, y, f, p, track, w)
 
 
@@ -298,15 +299,67 @@ class xf:
 
 
 def rise_text(c, s, x, y, f, p, rgb=None, a=1.0, align='l', track=0.0, shader=None):
-    """Text revealed by rising out of a clip line."""
+    """Kinetic text entrance. The style comes from the scene being drawn (TH.entrance_now), so scenes in one video
+    enter differently: rise, blur, slide, mask (wipe), pop or type."""
     if p <= 0 or not s: return
+    if p >= 1:
+        text(c, s, x, y, f, rgb, a, align, track, shader); return
     m = f.getMetrics(); asc, desc = -m.fAscent, m.fDescent
     w = tw(s, f, track)
     x0 = x - (w / 2 if align == 'c' else w if align == 'r' else 0)
-    c.save()
-    c.clipRect(skia.Rect.MakeLTRB(x0 - 60, y - asc * 1.3, x0 + w + 60, y + desc * 1.7))
-    text(c, s, x, y + (1 - e_out5(p)) * asc * 1.1, f, rgb, a * clamp(p * 2), align, track, shader)
-    c.restore()
+    style = getattr(TH, 'entrance_now', 'rise')
+    if style == 'blur':
+        e = e_out3(p)
+        text(c, s, x, y + (1 - e) * asc * 0.18, f, rgb, a * clamp(p * 1.6), align, track, shader, blur=(1 - e) * 16)
+    elif style == 'slide':
+        e = e_out5(p)
+        text(c, s, x - (1 - e) * 80, y, f, rgb, a * clamp(p * 1.8), align, track, shader)
+    elif style == 'mask':
+        e = e_io3(p)
+        c.save(); c.clipRect(skia.Rect.MakeLTRB(x0 - 4, y - asc * 1.3, x0 - 4 + (w + 8) * e, y + desc * 1.7))
+        text(c, s, x, y, f, rgb, a, align, track, shader)
+        c.restore()
+        if 0.02 < e < 0.98:                                     # the wipe's leading edge
+            rrect(c, x0 + w * e - 2, y - asc * 1.05, 5, asc * 1.25, 2, TH.acc, a * 0.9)
+    elif style == 'pop':
+        k = max(0.001, lerp(1.45, 1.0, e_back(p, 2.0)))
+        cx, cy = x0 + w / 2, y - asc * 0.4
+        c.save(); c.translate(cx, cy); c.scale(k, k); c.translate(-cx, -cy)
+        text(c, s, x, y, f, rgb, a * clamp(p * 3), align, track, shader)
+        c.restore()
+    elif style == 'type':
+        n = max(1, int(len(s) * clamp(p * 1.15) + 0.999))
+        text(c, s[:n], x0, y, f, rgb, a, 'l', track, shader)
+        if n < len(s): rrect(c, x0 + tw(s[:n], f, track) + 4, y - asc * 0.85, max(3, f.getSize() * 0.08), asc * 0.95, 1, TH.acc, a)
+    else:                                                       # rise
+        c.save()
+        c.clipRect(skia.Rect.MakeLTRB(x0 - 60, y - asc * 1.3, x0 + w + 60, y + desc * 1.7))
+        text(c, s, x, y + (1 - e_out5(p)) * asc * 1.1, f, rgb, a * clamp(p * 2), align, track, shader)
+        c.restore()
+
+
+class sweep:
+    """A glossy light sweep across whatever is drawn inside the block (logos, wordmarks). Template opt-in."""
+    def __init__(self, c, p, x0, y0, x1, y1):
+        self.c, self.p, self.r = c, p, (x0, y0, x1, y1)
+        self.on = bool(getattr(TH, 'sweep', False)) and 0.0 < p < 1.0
+    def __enter__(self):
+        if self.on: self.c.saveLayer(None, None)
+        return self
+    def __exit__(self, *e):
+        if not self.on: return
+        x0, y0, x1, y1 = self.r
+        cx = lerp(x0 - 260, x1 + 260, e_io3(self.p))
+        sh = skia.GradientShader.MakeLinear([skia.Point(cx - 140, y0), skia.Point(cx + 140, y1)],
+                                            [col((255, 255, 255), 0), col((255, 255, 255), 0.6), col((255, 255, 255), 0)])
+        self.c.drawRect(skia.Rect.MakeLTRB(x0 - 300, y0 - 40, x1 + 300, y1 + 40), skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kSrcATop))
+        self.c.restore()
+
+
+def font_file(weight, mono=False):
+    """Path of a bundled Inter / JetBrains Mono file (template-independent; used for page renders)."""
+    fam = T.JBM if mono else T.INTER
+    return os.path.join(FONT_DIR, fam[min(fam, key=lambda k: abs(k - weight))])
 
 
 def typed(s, p):

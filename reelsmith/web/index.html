@@ -293,6 +293,8 @@
 
     <label for="url">Link <small>GitHub repo, Hugging Face model, or any page</small></label>
     <input id="url" type="url" placeholder="https://github.com/owner/repo">
+    <label class="check"><input type="checkbox" id="screens" checked> Show the page
+      <small>a slow scroll through a screenshot of the link (or its README when no browser is installed)</small></label>
 
     <label id="tpl-l">Template <small id="tpl-hint">look, motion, music and tone</small></label>
     <div class="tpl-grid" id="tpl-grid" role="radiogroup" aria-labelledby="tpl-l"></div>
@@ -335,6 +337,8 @@
         <label for="vo-voice">Voice <small>empty uses the default from Settings</small></label>
         <input id="vo-voice" type="text" list="vo-voice-list" spellcheck="false" placeholder="Default voice">
         <datalist id="vo-voice-list"></datalist>
+        <label class="check"><input type="checkbox" id="burn" checked> Show the spoken words on screen
+          <small>word-by-word captions in the template's style; most Reels and Shorts are watched muted</small></label>
       </div>
     </div>
 
@@ -405,7 +409,7 @@
 const $ = (id) => document.getElementById(id);
 let template = 'midnight', templates = [], quality = 'draft', upscale = '', polling = null, current = null, openId = null, jobsTimer = null, voiceReady = false, lastDetail = '';
 
-const STAGES = { starting: 'Starting', narration: 'Writing and recording the voice-over', cancelled: 'Cancelled', interrupted: 'Interrupted', error: 'Failed', queued: 'Waiting to start', reading: 'Reading the link', planning: 'Planning the storyboard', audio: 'Synthesizing sound',
+const STAGES = { capture: 'Capturing the page', starting: 'Starting', narration: 'Writing and recording the voice-over', cancelled: 'Cancelled', interrupted: 'Interrupted', error: 'Failed', queued: 'Waiting to start', reading: 'Reading the link', planning: 'Planning the storyboard', audio: 'Synthesizing sound',
   rendering: 'Rendering frames', encode: 'Encoding video', upscale: 'Upscaling with ffmpeg', cover: 'Making the cover', captions: 'Writing captions', done: 'Done' };
 
 function setAccent(hex) {
@@ -434,10 +438,10 @@ document.querySelectorAll('#view-tabs button').forEach(b => b.addEventListener('
 
 function brief() {
   return { template, topic: $('topic').value.trim(), description: $('description').value.trim(), url: $('url').value.trim(),
-           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), quality, ...upOpts(), ...voOpts() };
+           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, quality, ...upOpts(), ...voOpts() };
 }
 function voOpts() {
-  return $('vo').checked ? { voiceover: true, voice: $('vo-voice').value.trim() || undefined } : {};
+  return $('vo').checked ? { voiceover: true, voice: $('vo-voice').value.trim() || undefined, burn_captions: $('burn').checked } : {};
 }
 function upOpts() {
   return quality === 'final' && upscale ? { upscale, upscale_method: $('u-native').checked ? 'native' : 'ffmpeg' } : {};
@@ -613,6 +617,25 @@ function showView(v) {
   }
 }
 
+/* Copying. navigator.clipboard only exists on secure pages (https:// or localhost), so when the app is opened at
+   http://<ip>:port it is undefined. Fall back to a selection + execCommand('copy'), and if the browser blocks that
+   too, select the text so Ctrl/Cmd+C works. */
+async function copyText(text, selectEl) {
+  if (window.isSecureContext && navigator.clipboard) {
+    try { await navigator.clipboard.writeText(text); return 'Copied'; } catch (e) { /* fall through */ }
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  if (ok) return 'Copied';
+  if (selectEl) { const r = document.createRange(); r.selectNodeContents(selectEl); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  return 'Press Ctrl+C';
+}
+function flash(btn, label) { btn.textContent = label; setTimeout(() => { btn.textContent = 'Copy'; }, label === 'Copied' ? 1400 : 3000); }
+
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function showResult(r) {
   current = r; $('view-tabs').hidden = false; showView('video');
@@ -636,7 +659,7 @@ function showResult(r) {
   $('caps').innerHTML = cards.map(([t, body], i) =>
     `<article class="cap"><header><h3>${t}</h3><button class="copy" data-i="${i}" type="button">Copy</button></header><pre>${esc(body)}</pre></article>`).join('');
   $('caps').querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(cards[b.dataset.i][1]); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1400);
+    flash(b, await copyText(cards[b.dataset.i][1], b.closest('.cap').querySelector('pre')));
   }));
   if (m.files && m.files.narration) {
     fetch(`${r.base}narration.json`).then(x => x.json()).then(n => {
@@ -644,7 +667,7 @@ function showResult(r) {
       const script = n.segments.map(sg => sg.text).join('\n');
       const el = document.createElement('article'); el.className = 'cap';
       el.innerHTML = `<header><h3>Voice-over script</h3><button class="copy" type="button">Copy</button></header><pre>${esc(n.segments.map(sg => `${sg.start.toFixed(1)}s  ${sg.text}`).join('\n'))}</pre>`;
-      el.querySelector('.copy').addEventListener('click', async (ev) => { await navigator.clipboard.writeText(script); ev.target.textContent = 'Copied'; setTimeout(() => ev.target.textContent = 'Copy', 1400); });
+      el.querySelector('.copy').addEventListener('click', async (ev) => flash(ev.target, await copyText(script, el.querySelector('pre'))));
       $('caps').prepend(el);
     }).catch(() => {});
   }

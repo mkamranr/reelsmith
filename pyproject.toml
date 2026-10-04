@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reelsmith"
-version = "0.7.0"
+version = "0.8.0"
 description = "Topic, description or link in. A 9:16 promo video with synced sound, captions and a cover out."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = ["skia-python>=87.5", "numpy>=1.24", "scipy>=1.10"]
+
+[project.optional-dependencies]
+screenshots = ["playwright>=1.40"]
 
 [project.scripts]
 reelsmith = "reelsmith.cli:main"

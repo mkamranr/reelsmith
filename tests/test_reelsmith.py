@@ -394,7 +394,12 @@ class TestTemplates(unittest.TestCase):
         sb['scenes'][5:5] = [{'type': 'quote', 'text': 'A post should never silently look wrong.', 'by': 'The README'},
                              {'type': 'chapter', 'number': 'II.', 'title': 'The editor', 'body': 'Markdown on the left, slides on the right.'},
                              {'type': 'rank', 'rank': '3', 'of': 5, 'title': 'Captions', 'sub': 'Written for you'},
-                             {'type': 'teaser', 'lines': ['Every frame.', 'Drawn in code.']}]
+                             {'type': 'teaser', 'lines': ['Every frame.', 'Drawn in code.']},
+                             {'type': 'scroll', 'image': 'page.png', 'kind': 'readme', 'url': 'github.com/o/r', 'caption': 'See it'}]
+        from reelsmith.capture import readme_page
+        assets = tempfile.mkdtemp(); readme_page('# Tool\n\nIt turns notes into slides.\n\n- one\n- two\n', 'Tool', 'github.com/o/r', {}, os.path.join(assets, 'page.png'))
+        sb['asset_dir'] = assets
+        sb['spoken'] = [{'start': 1.0, 'end': 4.0, 'text': 'Write the post, skip the design.'}]
         surf = skia.Surface(270, 480)
         for tid in T.TEMPLATES:
             tl = Timeline({**sb, 'template': tid})
@@ -441,7 +446,8 @@ class TestStructures(unittest.TestCase):
            'text': 'Tool turns notes into slides.\n\n## Features\n\n### Live preview\n\nSee every slide as you type it.\n\n'
                    '### Smart fitting\n\nText shrinks before it overflows.\n\n### Captions\n\nA caption is written for you.\n\n'
                    '### Backgrounds\n\nGenerated from your accent.\n\n```bash\nnpx tool init\n```\n'}
-    OPENERS = {'midnight': 'hook', 'editorial': 'quote', 'terminal': 'terminal', 'pop': 'hook', 'minimal': 'title', 'aurora': 'teaser'}
+    OPENERS = {'midnight': 'hook', 'editorial': 'quote', 'terminal': 'terminal', 'pop': 'hook', 'minimal': 'title', 'aurora': 'teaser',
+               'cinema': 'teaser', 'showcase': 'hook', 'broadcast': 'title'}
     SIGNATURE = {'editorial': 'chapter', 'pop': 'rank', 'aurora': 'teaser', 'terminal': 'terminal'}
 
     def test_builtin_plans_follow_each_template(self):
@@ -483,6 +489,55 @@ class TestStructures(unittest.TestCase):
         mid = sbm.plan_heuristic({'template': 'midnight', 'duration': 30}, self.SRC)
         pop = sbm.restructure(sbm.sanitize(mid, {'template': 'pop'}), {'template': 'pop'})
         self.assertIn('rank', [s['type'] for s in pop['scenes']])
+
+
+class TestPageTourAndCaptions(unittest.TestCase):
+    def test_readme_page_and_scroll_placement(self):
+        from reelsmith.capture import readme_page
+        from reelsmith.blueprints import add_scroll
+        from reelsmith.engine import templates as T
+        from reelsmith.storyboard import plan_heuristic
+        d = tempfile.mkdtemp()
+        info = readme_page('# X\n\nPara one\ncontinues here.\n\n---\n\n## Two\n\n- item\n  more\n\n```bash\nnpx x\n```\n', 'X', 'github.com/o/x', {'stars': 3}, os.path.join(d, 'p.png'))
+        self.assertEqual((info['kind'], info['width']), ('readme', 1080))
+        src = TestStructures.SRC
+        for tid in T.TEMPLATES:
+            sc = add_scroll(plan_heuristic({'template': tid, 'duration': 40}, src)['scenes'], tid, 'p.png', 'readme', 'x', 'See it')
+            types = [s['type'] for s in sc]
+            self.assertEqual(types.count('scroll'), 1, tid)
+            self.assertNotEqual(types[0], 'scroll', tid); self.assertEqual(types[-1], 'cta', tid)
+
+    def test_caption_groups(self):
+        from reelsmith.engine.timeline import Timeline
+        g = Timeline._caption_groups([{'start': 0.0, 'end': 3.0, 'text': 'Write the post, skip the design. Ship it today.'}])
+        self.assertTrue(all(len(x[2]) <= 4 for x in g))
+        self.assertAlmostEqual(g[0][0], 0.0); self.assertAlmostEqual(g[-1][1], 3.0, places=5)
+        self.assertEqual(' '.join(w for x in g for w, _, _ in x[2]), 'Write the post, skip the design. Ship it today.')
+
+
+class TestLogin(unittest.TestCase):
+    def test_password_protects_everything_but_healthz(self):
+        import base64, socket, threading, urllib.request, urllib.error
+        from http.server import ThreadingHTTPServer
+        os.environ['REELSMITH_PASSWORD'] = 's3cret'; os.environ['REELSMITH_CONFIG'] = os.path.join(tempfile.mkdtemp(), 'c.json')
+        try:
+            from reelsmith.server import make_handler
+            from reelsmith.jobs import JobStore
+            sock = socket.socket(); sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]; sock.close()
+            srv = ThreadingHTTPServer(('127.0.0.1', port), make_handler(JobStore(tempfile.mkdtemp(), lambda j, h: None), port))
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            def get(path, auth=None):
+                h = {'Authorization': 'Basic ' + base64.b64encode(auth.encode()).decode()} if auth else {}
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}{path}', headers=h)) as r: return r.status
+                except urllib.error.HTTPError as e: return e.code
+            self.assertEqual(get('/api/status'), 401)
+            self.assertEqual(get('/api/status', 'reelsmith:wrong'), 401)
+            self.assertEqual(get('/api/status', 'reelsmith:s3cret'), 200)
+            self.assertEqual(get('/healthz'), 200)
+            srv.shutdown()
+        finally:
+            os.environ.pop('REELSMITH_PASSWORD', None)
 
 if __name__ == '__main__':
     unittest.main()

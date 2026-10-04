@@ -22,6 +22,7 @@ from .highlight import highlight
 class Ctx:
     def __init__(self, brand_name):
         self.events, self.shakes = [], []
+        self.asset_dir = ''
         self.brand = brand_name
 
     def sfx(self, t, kind, gain=1.0, **kw):
@@ -84,10 +85,23 @@ def headline(c, s, accent, cx, y, size, p, weight=800, max_w=960, max_lines=2, t
         if pl <= 0: continue
         lw = tw(ln, f, tr)
         x = cx - lw / 2 if align == 'c' else cx
-        for word in ln.split(' '):
+        words = ln.split(' ')
+        total = sum(len(w) + 1 for w in words) or 1
+        style = getattr(TH, 'entrance_now', 'rise')
+        done = 0
+        for k, word in enumerate(words):
             ww = tw(word, f, tr)
             sh = acc_grad(x, yy - size, x + ww, yy) if _norm(word) in acc else None
-            rise_text(c, word, x, yy, f, pl, rgb, shader=sh, track=tr)
+            if style in ('type', 'mask'):                      # travels across the line in reading order
+                a0, a1 = done / total, (done + len(word) + 1) / total
+                wp = clamp((pl - a0) / max(1e-3, a1 - a0))
+            elif style in ('pop', 'slide', 'blur') and len(words) > 1:
+                d = 0.45 * k / (len(words) - 1)                 # gentle word-by-word stagger
+                wp = clamp((pl - d) / (1 - 0.45)) if pl < 1 else 1.0
+            else:
+                wp = pl
+            if wp > 0: rise_text(c, word, x, yy, f, wp, rgb, shader=sh, track=tr)
+            done += len(word) + 1
             x += ww + sp + tr
     return size, n
 
@@ -312,8 +326,9 @@ class Title(Scene):
         glow = e_out3(prog(t, 0.9, 1.9))
         sh = skia.GradientShader.MakeRadial(skia.Point(540, 760), 520, [col(TH.acc, 0.22 * glow), col(TH.acc, 0)])
         c.drawRect(skia.Rect.MakeWH(W, H), skia.Paint(Shader=sh))
-        mark(c, 540, 760, 300, t, self.label)
-        wordmark(c, self.name, 540, 1135, 118, 1.1, t)
+        with sweep(c, prog(t, 1.9, 2.8), 60, 560, 1020, 1180):
+            mark(c, 540, 760, 300, t, self.label)
+            wordmark(c, self.name, 540, 1135, 118, 1.1, t)
         para(c, S(self.d, 'tagline'), 540, 1222, 40, prog(t, 1.9, 2.5), max_lines=2)
 
 
@@ -770,8 +785,9 @@ class CTA(Scene):
         if fl > 0:
             sh = skia.GradientShader.MakeRadial(skia.Point(540, 900), 900, [col(TH.acc, 0.5 * fl), col(TH.acc, 0)])
             c.drawRect(skia.Rect.MakeWH(W, H), skia.Paint(Shader=sh))
-        mark(c, 540, 700, 230, t, self.label)
-        wordmark(c, self.name, 540, 1010, 108, 0.15, t)
+        with sweep(c, prog(t, 1.0, 1.9), 60, 560, 1020, 1060):
+            mark(c, 540, 700, 230, t, self.label)
+            wordmark(c, self.name, 540, 1010, 108, 0.15, t)
         url = S(self.d, 'url')
         pu = prog(t, 0.8, 1.25)
         y = 1080
@@ -953,5 +969,111 @@ class Teaser(Scene):
         c.drawRect(skia.Rect.MakeXYWH(0, H - bar, W, bar), paint((0, 0, 0), 0.92))
 
 
+# ============================== 15. SCROLL (page tour) ==============================
+_IMG_CACHE = {}
+
+
+def _load_image(path):
+    if path not in _IMG_CACHE:
+        try:
+            _IMG_CACHE[path] = skia.Image.MakeFromEncoded(skia.Data.MakeFromFileName(path)).withDefaultMipmaps()
+        except Exception:
+            _IMG_CACHE[path] = None
+    return _IMG_CACHE[path]
+
+
+class Scroll(Scene):
+    """A slow scroll through a page screenshot inside a device frame, tilting in with real perspective."""
+    kind = 'scroll'
+    SAMP = skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear)
+
+    @staticmethod
+    def budget(d): return 4.5, 8.5
+
+    def setup(self):
+        import os
+        img = S(self.d, 'image')
+        path = img if os.path.isabs(img) else os.path.join(self.ctx.asset_dir or '', img)
+        self.img = _load_image(path) if img else None
+        dev = TH.device
+        if dev == 'phone':   self.fw, self.fh, self.r, self.top, self.inset = 760, 1440, 96, 300, 26
+        elif dev == 'card':  self.fw, self.fh, self.r, self.top, self.inset = 880, 1380, 34, 330, 0
+        else:                self.fw, self.fh, self.r, self.top, self.inset = 920, 1420, 30, 310, 0
+        self.bar = 92 if dev == 'browser' else 0
+        self.vx, self.vy = self.inset, self.inset + self.bar
+        self.vw, self.vh = self.fw - 2 * self.inset, self.fh - 2 * self.inset - self.bar
+        if self.img:
+            self.k = self.vw / self.img.width()
+            room = max(0.0, self.img.height() * self.k - self.vh)
+            self.travel = min(room, 230 * max(1.0, self.dur - 2.2))          # slow enough to read
+        else:
+            self.k, self.travel = 1.0, 0.0
+
+    def sounds(self):
+        self.at(0.0, 'whoosh', 0.55, dur=0.6, up=True)
+        self.at(0.75, 'tick', 0.4)
+
+    def offset(self, t):
+        u = prog(t, 1.0, max(1.2, self.dur - 0.9))
+        return self.travel * (u * u * u * (u * (6 * u - 15) + 10))        # smootherstep: eases in and settles
+
+    def frame_matrix(self, t):
+        """Frame-local rect → screen quad with a perspective tilt that settles to flat."""
+        e = e_out5(prog(t, 0.0, 1.0))
+        tilt = (1 - e) * 24
+        x0 = 540 - self.fw / 2; y0 = self.top + (1 - e) * 220
+        pts = [(-self.fw / 2, -self.fh / 2, 0), (self.fw / 2, -self.fh / 2, 0), (self.fw / 2, self.fh / 2, 0), (-self.fw / 2, self.fh / 2, 0)]
+        r = math.radians(tilt); cs, sn = math.cos(r), math.sin(r)
+        rot = [(x, y * cs, -y * sn) for x, y, z in pts]                 # tilt back around the x axis
+        cy = y0 + self.fh / 2
+        quad = project_quad(rot, 540, cy, 1700)
+        m = skia.Matrix()
+        m.setPolyToPoly([skia.Point(0, 0), skia.Point(self.fw, 0), skia.Point(self.fw, self.fh), skia.Point(0, self.fh)], quad)
+        return m, e
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 960, 1.0 + 0.04 * e_io3(prog(t, 0.6, self.dur)))
+        cap = S(self.d, 'caption')
+        cy = 250 if TH.hud in ('broadcast', 'cinema', 'terminal', 'deck') else 210     # clear of top overlays
+        if cap: headline(c, cap, S(self.d, 'accent'), 540, cy, 62, prog(t, 0.15, 0.7), 800, max_lines=1)
+        sh = skia.GradientShader.MakeRadial(skia.Point(540, self.top + self.fh / 2), 760, [col(TH.acc, 0.20), col(TH.acc, 0)])
+        c.drawRect(skia.Rect.MakeWH(W, H), skia.Paint(Shader=sh))
+        m, e = self.frame_matrix(t)
+        c.save(); c.concat(m)
+        with layer(c, clamp(e * 1.4)):
+            rr = skia.RRect.MakeRectXY(skia.Rect.MakeWH(self.fw, self.fh), self.r, self.r)
+            c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(0, 50, self.fw, self.fh), self.r, self.r), paint((0, 0, 0), 0.55, blur=60))
+            body = (18, 18, 22) if TH.device == 'phone' else TH.panel
+            c.drawRRect(rr, paint(body))
+            c.drawRRect(rr, paint((255, 255, 255) if not TH.light else TH.border, 0.16 if not TH.light else 1, stroke=3))
+            if self.bar:
+                for i, rgb in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]): circle(c, 36 + i * 28, self.bar / 2, 9, rgb)
+                url = S(self.d, 'url') or ''
+                rrect(c, 140, 22, self.fw - 170, self.bar - 44, (self.bar - 44) / 2, TH.surf if not TH.light else TH.codebg)
+                fs = fit_size(url, 'inter', 500, self.fw - 230, 26, 16)
+                text(c, url, 170, self.bar / 2 + 9, I(500, fs), TH.muted)
+            vr = skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(self.vx, self.vy, self.vw, self.vh), max(0, self.r - self.inset), max(0, self.r - self.inset))
+            c.save(); c.clipRRect(vr, skia.ClipOp.kIntersect, True)
+            c.drawRect(skia.Rect.MakeXYWH(self.vx, self.vy, self.vw, self.vh), paint((255, 255, 255) if TH.light else (13, 17, 23)))
+            if self.img:
+                off = self.offset(t) / self.k
+                src = skia.Rect.MakeXYWH(0, off, self.img.width(), min(self.img.height() - off, self.vh / self.k))
+                dst = skia.Rect.MakeXYWH(self.vx, self.vy, self.vw, src.height() * self.k)
+                c.drawImageRect(self.img, src, dst, self.SAMP)
+                for y0, y1, a0, a1 in ((self.vy, self.vy + 70, 0.35, 0), (self.vy + self.vh - 90, self.vy + self.vh, 0, 0.35)):
+                    g = skia.GradientShader.MakeLinear([skia.Point(0, y0), skia.Point(0, y1)], [col((0, 0, 0), a0), col((0, 0, 0), a1)])
+                    c.drawRect(skia.Rect.MakeLTRB(self.vx, y0, self.vx + self.vw, y1), skia.Paint(Shader=g))
+                if self.travel > 0:                                   # scrollbar
+                    total = self.img.height() * self.k
+                    bh = max(60, self.vh * self.vh / total); by = self.vy + (self.vh - bh) * (self.offset(t) / max(1, total - self.vh))
+                    rrect(c, self.vx + self.vw - 14, by, 7, bh, 3.5, (128, 128, 128), 0.55 * prog(t, 1.0, 1.4))
+            c.restore()
+            if TH.device == 'phone':
+                rrect(c, self.fw / 2 - 70, self.inset + 16, 140, 34, 17, (0, 0, 0))     # camera island
+        c.restore()
+        if S(self.d, 'kind') == 'readme':
+            pill(c, 540, self.top + self.fh + 40, 'README', M(700, 22), TH.muted, TH.surf, prog(t, 0.8, 1.2), pad=16, h=40, align='c', track=3)
+
+
 REGISTRY = {cls.kind: cls for cls in (Hook, Title, Code, Statement, Bullets, Features, Stats, Steps, Terminal, CTA,
-                                      Quote, Chapter, Rank, Teaser)}
+                                      Quote, Chapter, Rank, Teaser, Scroll)}

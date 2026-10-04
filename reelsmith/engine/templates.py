@@ -27,6 +27,7 @@ BASE = dict(
                bass=0.3, kick=0.42, hats=0.07, clap=0.0),
     sfx={}, tone='', prefer=[],
     align='c', margin=90, pace=1.0, format='', blueprint='demo',
+    entrances=['rise'], sweep=False, hud='progress', device='browser', caption_style='pill', tr=0.42,
 )
 
 
@@ -38,6 +39,7 @@ def _t(**kw):
 
 TEMPLATES = {
     'midnight': _t(
+        entrances=['rise', 'mask', 'pop', 'rise'], sweep=True, hud='progress', device='browser',
         format='Product demo', blueprint='demo',
         name='Midnight', description='Dark navy, amber, a faint grid and confident kinetic type. The original look.',
         accent_free=True,
@@ -47,6 +49,7 @@ TEMPLATES = {
         prefer=['code', 'terminal', 'steps', 'stats']),
 
     'editorial': _t(
+        entrances=['mask', 'blur', 'mask'], hud='deck', device='card', caption_style='serif', tr=0.5,
         format='Feature story', blueprint='story', align='l', margin=104, pace=1.1,
         name='Editorial', description='Paper-light pages, a serif display face, a red accent and thin rules. Page-turn cuts.',
         light=True, accent='#C8102E', acc2='#8F0A20',
@@ -62,6 +65,7 @@ TEMPLATES = {
         prefer=['statement', 'bullets', 'stats', 'title']),
 
     'terminal': _t(
+        entrances=['type', 'mask', 'type'], hud='terminal', device='browser', caption_style='mono', tr=0.34,
         format='README walkthrough', blueprint='walkthrough', align='l', margin=96, pace=0.95,
         name='Terminal', description='Black CRT with scanlines, all monospace, phosphor-green glow and glitch cuts.',
         accent='#39FF88', acc2='#00E5FF',
@@ -76,6 +80,7 @@ TEMPLATES = {
         prefer=['terminal', 'code', 'steps', 'stats']),
 
     'pop': _t(
+        entrances=['pop', 'slide', 'pop'], sweep=True, hud='none', device='phone', caption_style='bold', tr=0.36,
         format='Countdown listicle', blueprint='listicle', pace=0.8,
         name='Pop', description='Cream background, big colour shapes that change every scene, thick outlines and hard shadows.',
         light=True, accent='#2B59FF', acc2='#2B59FF',
@@ -92,6 +97,7 @@ TEMPLATES = {
         prefer=['hook', 'statement', 'stats', 'features', 'bullets']),
 
     'minimal': _t(
+        entrances=['blur', 'rise', 'blur'], hud='none', device='phone', caption_style='clean', tr=0.55,
         format='Keynote', blueprint='keynote', pace=1.25,
         name='Minimal', description='Near-white, light-weight type, generous space, soft shadows and quiet crossfades.',
         light=True, accent='#2563EB', acc2='#1D4ED8',
@@ -106,6 +112,7 @@ TEMPLATES = {
         prefer=['title', 'statement', 'features', 'bullets']),
 
     'aurora': _t(
+        entrances=['blur', 'pop', 'blur'], sweep=True, hud='none', device='phone', caption_style='pill', tr=0.5,
         format='Launch trailer', blueprint='trailer',
         name='Aurora', description='Deep violet with moving gradient light, frosted-glass cards and a modern grotesk.',
         accent='#F472B6', acc2='#22D3EE',
@@ -120,6 +127,52 @@ TEMPLATES = {
         sfx={'impact': 0.8, 'whoosh': 0.8},
         tone='Visionary but specific, like a modern product launch. Big idea first, then proof.',
         prefer=['title', 'features', 'stats', 'statement']),
+    'cinema': _t(
+        entrances=['blur', 'mask', 'blur'], sweep=True, hud='cinema', device='card', caption_style='film', tr=0.75,
+        format='Mini documentary', blueprint='documentary', pace=1.15,
+        name='Cinema', description='A warm film look: letterbox, drifting light leaks, serif titles and slow dissolves.',
+        accent='#E8A04B', acc2='#C2562F',
+        bg=(14, 11, 9), surf=(255, 240, 220, 0.07), text=(244, 236, 224), muted=(172, 158, 142), border=(255, 240, 220, 0.18),
+        codebg=(20, 16, 13, 0.85), panel=(24, 19, 15, 0.88), red=(230, 90, 70), green=(150, 200, 120),
+        fonts=dict(sans=INTER, display=FRAUNCES, mono=JBM), display_weight={700: 600, 800: 700, 900: 700},
+        track=0.3, radius=0.6, shadow='soft', shadow_alpha=0.9, bg_style='cinema', vignette=0.72, grain=0.10,
+        transition='dissolve',
+        music=dict(bpm=76, prog='minor', pad='lush', pad_gain=0.09, pad_lp=1300, arp='bell', arp_gain=0.07,
+                   bass=0.2, kick=0.1, hats=0.0),
+        sfx={'impact': 0.7, 'boom': 1.1, 'whoosh': 0.5, 'key': 0.6, 'tick': 0.6},
+        tone='Cinematic and human, like a short documentary. Stakes first, then the turn, then the payoff.',
+        prefer=['teaser', 'quote', 'chapter', 'statement']),
+
+    'showcase': _t(
+        entrances=['slide', 'pop', 'rise'], sweep=True, hud='none', device='phone', caption_style='pill', tr=0.42,
+        format='Screen tour', blueprint='tour',
+        name='Showcase', description='A studio stage for your product: device frames, the page scrolling by, glossy light.',
+        accent='#8B9DFF', acc2='#5EEAD4',
+        bg=(16, 18, 24), surf=(34, 38, 48), text=(245, 246, 250), muted=(150, 158, 175), border=(52, 58, 72),
+        codebg=(20, 22, 30), panel=(24, 27, 35),
+        fonts=dict(sans=INTER, display=SPACE, mono=JBM), display_weight={700: 700, 800: 700, 900: 700},
+        track=0.7, radius=1.25, shadow='soft', bg_style='studio', vignette=0.5, grain=0.04, transition='zoom',
+        music=dict(bpm=116, prog='major', pad='saw', pad_gain=0.06, pad_lp=2000, arp='pluck', arp_gain=0.09,
+                   bass=0.28, kick=0.42, hats=0.06),
+        sfx={'pop': 1.1},
+        tone='Product-focused and visual. Point at what is on screen; short, confident lines.',
+        prefer=['scroll', 'features', 'stats', 'title']),
+
+    'broadcast': _t(
+        entrances=['slide', 'mask', 'slide'], hud='broadcast', device='browser', caption_style='strap', tr=0.32,
+        format='News segment', blueprint='news', align='l', margin=80, pace=0.95,
+        name='Broadcast', description='A news segment: red-and-navy straps, a running ticker, hard wipes, lower-third captions.',
+        accent='#E11D2E', acc2='#FF4D5E',
+        bg=(6, 16, 44), surf=(14, 30, 74), text=(255, 255, 255), muted=(172, 188, 218), border=(40, 66, 130),
+        codebg=(8, 20, 52), panel=(10, 24, 60), red=(255, 80, 80), green=(90, 220, 150),
+        fonts=dict(sans=INTER, display=INTER, mono=JBM), display_weight={700: 800, 800: 900, 900: 900},
+        track=1.2, radius=0.15, shadow='soft', shadow_alpha=0.8, bg_style='broadcast', vignette=0.45, grain=0.03,
+        transition='left',
+        music=dict(bpm=124, prog='minor', pad='saw', pad_gain=0.05, pad_lp=1800, arp='square', arp_gain=0.07,
+                   bass=0.3, kick=0.45, hats=0.08),
+        sfx={'impact': 1.1, 'whoosh': 1.1, 'swish': 1.2},
+        tone='Newsroom: who, what, why it matters. Crisp, factual sentences, no hype words.',
+        prefer=['title', 'statement', 'bullets', 'stats', 'quote']),
 }
 
 DEFAULT = 'midnight'

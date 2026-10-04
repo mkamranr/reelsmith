@@ -23,6 +23,13 @@ RUN pip install -r requirements.txt
 COPY pyproject.toml README.md LICENSE ./
 COPY reelsmith ./reelsmith
 COPY examples ./examples
+# Headless Chromium for the page scroll-through screenshots (about +450 MB). Build with --build-arg WITH_BROWSER=0 to
+# skip it; videos then show the README drawn as a page instead.
+ARG WITH_BROWSER=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN if [ "$WITH_BROWSER" = "1" ]; then \
+      pip install "playwright>=1.40" && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*; \
+    fi
 RUN pip install --no-deps . \
  && python -c "import skia, numpy, scipy; from reelsmith.engine import timeline; print('import ok')"
 
@@ -35,7 +42,7 @@ VOLUME ["/data"]
 
 EXPOSE 5179
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import os,urllib.request; p=os.environ.get('REELSMITH_PORT','5179'); urllib.request.urlopen(urllib.request.Request(f'http://localhost:{p}/api/status', headers={'Host': f'localhost:{p}'}), timeout=4)" || exit 1
+  CMD python -c "import os,urllib.request; p=os.environ.get('REELSMITH_PORT','5179'); urllib.request.urlopen(urllib.request.Request(f'http://localhost:{p}/healthz', headers={'Host': f'localhost:{p}'}), timeout=4)" || exit 1
 
 # Listens on all interfaces *inside* the container; compose publishes it on the host's loopback only.
 # The port inside and outside must match: the server only answers requests addressed to its own port.

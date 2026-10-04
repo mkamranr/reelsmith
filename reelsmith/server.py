@@ -28,6 +28,8 @@ def make_runner(out_root):
         p = job['payload']
         inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template')}
         inputs['restructure'] = bool(p.get('restructure'))
+        inputs['screens'] = p.get('screens', True) is not False
+        inputs['burn_captions'] = p.get('burn_captions', True) is not False
         inputs['duration'] = float(p.get('duration') or (p.get('storyboard') or {}).get('duration') or 45)
         return pipeline.generate(
             inputs, out_root, 'draft' if p.get('quality') == 'draft' else 'final', storyboard=p.get('storyboard'),
@@ -41,6 +43,12 @@ def make_handler(jobs, port):
     allowed_hosts = {f'127.0.0.1:{port}', f'localhost:{port}', f'[::1]:{port}'}
     extra = os.environ.get('REELSMITH_ALLOWED_HOSTS', '')
     allowed_hosts |= {h.strip() for h in extra.split(',') if h.strip()}
+    # Optional login. The app has none by default (it listens on 127.0.0.1); set REELSMITH_PASSWORD whenever it is
+    # reachable from other machines, e.g. after binding to 0.0.0.0.
+    password = os.environ.get('REELSMITH_PASSWORD', '')
+    user = os.environ.get('REELSMITH_USER', 'reelsmith')
+    import base64, hmac
+    expected = ('Basic ' + base64.b64encode(f'{user}:{password}'.encode()).decode()) if password else None
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a): pass
@@ -53,6 +61,13 @@ def make_handler(jobs, port):
             origin = self.headers.get('Origin')
             if origin and origin.split('://', 1)[-1] not in allowed_hosts:
                 self._send(403, {'error': 'Cross-origin request refused.'}); return False
+            if expected and urlparse(self.path).path != '/healthz':
+                got = self.headers.get('Authorization', '')
+                if not hmac.compare_digest(got.encode(), expected.encode()):
+                    body = b'{"error": "Sign in required."}'
+                    self.send_response(401); self.send_header('WWW-Authenticate', 'Basic realm="Reelsmith", charset="UTF-8"')
+                    self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body)))
+                    self.end_headers(); self.wfile.write(body); return False
             return True
 
         def _send(self, code, body, ctype='application/json'):
@@ -68,6 +83,8 @@ def make_handler(jobs, port):
         def do_GET(self):
             if not self._trusted(): return
             path = urlparse(self.path).path
+            if path == '/healthz':
+                return self._send(200, {'ok': True})
             if path == '/api/config':
                 return self._send(200, {'config': cfgmod.public(cfgmod.load()), 'presets': cfgmod.PRESETS, 'active': llm.provider()})
             if path in ('/', '/index.html'):
@@ -179,6 +196,8 @@ def make_handler(jobs, port):
 
 
 def serve(host='127.0.0.1', port=5179, out='output'):
+    if host not in ('127.0.0.1', 'localhost', '::1') and not os.environ.get('REELSMITH_PASSWORD'):
+        print('  WARNING: reachable from other machines with no login. Set REELSMITH_PASSWORD (and optionally REELSMITH_USER).')
     jobs = JobStore(out, make_runner(os.path.abspath(out)))
     srv = ThreadingHTTPServer((host, port), make_handler(jobs, port))
     p = llm.provider()

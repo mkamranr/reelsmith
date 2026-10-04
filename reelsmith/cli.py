@@ -18,6 +18,8 @@ def main(argv=None):
     g.add_argument('--draft', action='store_true', help='540x960 fast preview instead of 1080x1920')
     g.add_argument('--upscale', choices=['2k', '4k'], help='also produce a 1440x2560 (2k) or 2160x3840 (4k) file')
     g.add_argument('--voiceover', action='store_true', help='narrate the video (needs a voice set up: Settings → Voice)')
+    g.add_argument('--no-screens', action='store_true', help='skip the page scroll-through screenshot')
+    g.add_argument('--no-captions', action='store_true', help="don't put the spoken words on screen (voice-over only)")
     g.add_argument('--voice', default=None, help='voice name for this video (default: the one in your voice settings)')
     g.add_argument('--upscale-method', choices=['ffmpeg', 'native'], default='ffmpeg',
                    help='ffmpeg: upscale the 1080p render (fast). native: render at that size (sharpest, ~2-4x slower)')
@@ -99,6 +101,7 @@ def main(argv=None):
     try:
         if a.cmd == 'plan':
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
+            inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
             src = fetch_source(a.url) if a.url else None
             sb, how = sbm.plan(inputs, src, use_llm=not a.no_llm)
             json.dump(sb, open(a.out, 'w'), indent=2, ensure_ascii=False)
@@ -108,6 +111,7 @@ def main(argv=None):
             if not (a.topic or a.description or a.url):
                 ap.error('give at least one of --topic, --description, --url')
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
+            inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
             pipeline.generate(inputs, a.out, 'draft' if a.draft else 'final', a.workers, use_llm=not a.no_llm, progress=_bar(),
                               upscale=a.upscale, upscale_method=a.upscale_method,
                               voiceover=a.voiceover, voice=a.voice)
