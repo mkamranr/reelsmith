@@ -27,7 +27,10 @@ def allocate(scene_dicts, total, beat=BEAT):
         for kind in drop_order:
             cand = [i for i, s in enumerate(scenes[1:-1], 1) if s['type'] == kind]
             if cand: idx = cand[-1]; break
-        if idx is None: idx = len(scenes) // 2
+        if idx is None:
+            mids = [i for i in range(1, len(scenes) - 1) if scenes[i]['type'] != 'scroll']
+            if not mids: break
+            idx = min(mids, key=lambda i: abs(i - len(scenes) // 2))
         scenes.pop(idx); budgets.pop(idx)
 
     mins = np.array([b[0] for b in budgets]); ideals = np.array([b[1] for b in budgets])
@@ -37,7 +40,14 @@ def allocate(scene_dicts, total, beat=BEAT):
         d = mins.copy(); spare = total - mins.sum()
         want = np.maximum(ideals - mins, 0.01)
         d += spare * want / want.sum()
-    # snap boundaries to the beat grid
+    # the page tour may be long (a long README read slowly) but never more than 45% of the video
+    for i, sc in enumerate(scenes):
+        if sc['type'] == 'scroll' and d[i] > 0.45 * total and len(scenes) > 1:
+            extra = d[i] - 0.45 * total; d[i] = 0.45 * total
+            others = [j for j in range(len(scenes)) if j != i]
+            w = np.array([max(ideals[j] - d[j], 0.05) for j in others]); w = w / w.sum()
+            for j, k in zip(others, w): d[j] += extra * k
+        # snap boundaries to the beat grid
     bounds = np.concatenate([[0], np.cumsum(d)])
     bounds = np.round(bounds / beat) * beat
     bounds[-1] = total
@@ -60,6 +70,7 @@ class Timeline:
         self.name = sb.get('name') or sb.get('title') or 'Reelsmith'
         self.ctx = Ctx(self.name)
         self.ctx.asset_dir = sb.get('asset_dir') or ''
+        self.ctx.handle = bool((sb.get('handle') or '').strip())
         plan = allocate(sb['scenes'], self.duration, self.beat)
         self.scenes = []
         for i, (d, t0, dur) in enumerate(plan):
@@ -74,6 +85,8 @@ class Timeline:
         for _ in range(6):
             n = rng.integers(0, 255, (480, 270), dtype=np.uint8)
             self.grain.append(skia.Image.fromarray(np.ascontiguousarray(np.dstack([n, n, n, np.full_like(n, 255)]))))
+        h = (sb.get('handle') or '').strip()
+        self.handle = ('@' + h if h and not h.startswith('@') and ' ' not in h and '.' not in h and '/' not in h else h)[:40]
         self.captions = self._caption_groups(sb.get('spoken') or []) if sb.get('burn_captions', True) else []
         self.ticker = '   •   '.join(x for x in (self._headline(sc.d) for sc in self.scenes) if x) or self.name
         self.hud_from = self.scenes[2].t0 if len(self.scenes) > 3 else 1e9
@@ -252,7 +265,34 @@ class Timeline:
             if af > 0:
                 fr = int(round(t * FPS)) % FPS
                 text(c, f'{int(t // 3600):02d}:{int(t // 60) % 60:02d}:{int(t) % 60:02d}:{fr:02d}', 1010, H - 62, M(500, 22), TH.muted, af * 0.8, 'r', track=2)
-                text(c, self.name.upper()[:28], 70, H - 62, M(700, 22), TH.muted, af * 0.8, track=4)
+                text(c, (self.handle or self.name.upper())[:30], 70, H - 62, M(700, 24 if self.handle else 22), TH.text if self.handle else TH.muted, af * (0.95 if self.handle else 0.8), track=2 if self.handle else 4)
+
+    def draw_handle(self, c, t):
+        """Your handle, visible near the bottom for the whole video, in the template's style."""
+        if not self.handle or TH.hud == 'cinema': return          # Cinema shows it in the letterbox (hud)
+        a = prog(t, 0.6, 1.2) * (1 - prog(t, self.duration - 0.7, self.duration))
+        if a <= 0: return
+        h = self.handle
+        if TH.hud == 'broadcast':
+            f = I(800, 26); w = tw(h, f) + 40
+            rrect(c, W - 60 - w, 1736, w, 46, 3, TH.acc, a)
+            text(c, h, W - 60 - w / 2, 1767, f, (255, 255, 255), a, 'c')
+        elif TH.hud == 'terminal':
+            f = M(700, 28)
+            x = 64 + text(c, '$ ', 64, 1790, f, TH.acc, a)
+            text(c, h, x, 1790, f, TH.text, a * 0.9)
+        elif TH.caption_style == 'bold':                            # Pop: a sticker
+            f = I(900, 32); w = tw(h, f) + 52
+            with xf(c, 0, 0, 1, -3, 540, 1745):
+                rrect(c, 540 - w / 2 + 6, 1716 + 6, w, 60, 30, TH.border, a)
+                rrect(c, 540 - w / 2, 1716, w, 60, 30, (255, 255, 255), a)
+                rrect(c, 540 - w / 2, 1716, w, 60, 30, TH.border, a, stroke=4)
+                text(c, h, 540, 1757, f, (17, 17, 17), a, 'c')
+        else:
+            f = I(600, 28); w = tw(h, f) + 70
+            rrect(c, 540 - w / 2, 1712, w, 56, 28, TH.surf, a * 0.82)
+            circle(c, 540 - w / 2 + 26, 1740, 6, TH.acc, a)
+            text(c, h, 540 - w / 2 + 44, 1750, f, TH.text, a)
 
     # spoken-word captions, burned in (Reels/Shorts are mostly watched muted)
     @staticmethod
@@ -388,6 +428,7 @@ class Timeline:
                         c.drawRect(skia.Rect.MakeXYWH(0, y, W, 6 + k * 3), paint(TH.acc, 0.35 * g))
         self.draw_captions(c, t)
         self.hud(c, t)
+        self.draw_handle(c, t)
         self.post_fx(c, f)
         fo = prog(t, self.duration - 0.7, self.duration); fi = 1 - prog(t, 0, 0.25)
         if max(fo, fi) > 0: c.drawRect(skia.Rect.MakeWH(W, H), paint(TH.bg, max(fo, fi)))

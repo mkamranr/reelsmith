@@ -23,6 +23,7 @@ class Ctx:
     def __init__(self, brand_name):
         self.events, self.shakes = [], []
         self.asset_dir = ''
+        self.handle = False
         self.brand = brand_name
 
     def sfx(self, t, kind, gain=1.0, **kw):
@@ -712,7 +713,7 @@ class Steps(Scene):
         foot = S(self.d, 'footer')
         pb = prog(t, self.zoom_t + 1.0, self.zoom_t + 1.4)
         if foot and pb > 0:
-            fy = self.ny[-1] + bh / 2 + 120
+            fy = self.ny[-1] + bh / 2 + (70 if self.ctx.handle else 120)     # stay clear of the handle
             fs = fit_size('●  ' + foot, 'inter', 600, 900, 30, 18)
             with xf(c, 0, 0, e_back(pb), 0, 540, fy + 32):
                 pill(c, 540, fy, '●  ' + foot, I(600, fs), TH.green, mix(TH.bg, TH.green, 0.16), 1, pad=28, h=64, align='c')
@@ -987,8 +988,25 @@ class Scroll(Scene):
     kind = 'scroll'
     SAMP = skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear)
 
+    SLOW, FAST, DWELL = 170.0, 650.0, 0.45      # display px/s through the README, above it; pause where it starts
+
     @staticmethod
-    def budget(d): return 4.5, 8.5
+    def _plan(d, vw=760, vh=1300):
+        """(fast_px, slow_px) of display travel for this page at a given viewport size."""
+        w, h, fy = d.get('img_w') or 0, d.get('img_h') or 0, d.get('focus_y') or 0
+        if not (w and h): return 0.0, 0.0
+        k = vw / w
+        fast = fy * k
+        slow = max(0.0, (h - fy) * k - vh)
+        return fast, slow
+
+    @staticmethod
+    def budget(d):
+        """Long READMEs get long scenes (the planner fits the rest of the video around it)."""
+        fast, slow = Scroll._plan(d)
+        need = 2.4 + fast / Scroll.FAST + (Scroll.DWELL if fast else 0) + slow / Scroll.SLOW
+        ideal = clamp(need, 6.0, 32.0)
+        return clamp(ideal * 0.4, 5.0, 11.0), ideal
 
     def setup(self):
         import os
@@ -999,23 +1017,42 @@ class Scroll(Scene):
         if dev == 'phone':   self.fw, self.fh, self.r, self.top, self.inset = 760, 1440, 96, 300, 26
         elif dev == 'card':  self.fw, self.fh, self.r, self.top, self.inset = 880, 1380, 34, 330, 0
         else:                self.fw, self.fh, self.r, self.top, self.inset = 920, 1420, 30, 310, 0
+        if self.ctx.handle and TH.hud != 'cinema': self.fh -= 110          # leave the bottom for your handle
         self.bar = 92 if dev == 'browser' else 0
         self.vx, self.vy = self.inset, self.inset + self.bar
         self.vw, self.vh = self.fw - 2 * self.inset, self.fh - 2 * self.inset - self.bar
-        if self.img:
-            self.k = self.vw / self.img.width()
-            room = max(0.0, self.img.height() * self.k - self.vh)
-            self.travel = min(room, 230 * max(1.0, self.dur - 2.2))          # slow enough to read
-        else:
-            self.k, self.travel = 1.0, 0.0
+        self.k = self.vw / self.img.width() if self.img else 1.0
+        d = dict(self.d)
+        if self.img: d.update(img_w=self.img.width(), img_h=self.img.height())
+        self.fast, slow_total = Scroll._plan(d, self.vw, self.vh)
+        span = max(0.5, self.dur - 1.0 - 0.9)                      # scrolling window inside the scene
+        self.ta = min(self.fast / self.FAST, span * 0.35) if self.fast else 0.0
+        self.tdw = self.DWELL if self.fast else 0.0
+        self.tb = max(0.3, span - self.ta - self.tdw)
+        self.slow = min(slow_total, self.SLOW * self.tb)            # never faster than reading speed
+        self.travel = self.fast + self.slow
 
     def sounds(self):
         self.at(0.0, 'whoosh', 0.55, dur=0.6, up=True)
         self.at(0.75, 'tick', 0.4)
+        if self.fast: self.at(1.0 + self.ta, 'tick', 0.5)
+
+    @staticmethod
+    def _ramp(u, r=0.15):
+        """Position along a move with eased start/end and a constant-speed middle (peak speed ≈ 1.18× average)."""
+        u = clamp(u); v = 1 / (1 - r)
+        if u < r: return v * u * u / (2 * r)
+        if u > 1 - r: return 1 - v * (1 - u) ** 2 / (2 * r)
+        return v * (u - r / 2)
 
     def offset(self, t):
-        u = prog(t, 1.0, max(1.2, self.dur - 0.9))
-        return self.travel * (u * u * u * (u * (6 * u - 15) + 10))        # smootherstep: eases in and settles
+        t0 = 1.0
+        if t <= t0: return 0.0
+        if self.ta and t < t0 + self.ta:
+            u = (t - t0) / self.ta; return self.fast * (u * u * (3 - 2 * u))    # brisk, settling onto the README
+        tb0 = t0 + self.ta + self.tdw
+        if t < tb0: return self.fast
+        return self.fast + self.slow * self._ramp((t - tb0) / self.tb)
 
     def frame_matrix(self, t):
         """Frame-local rect → screen quad with a perspective tilt that settles to flat."""

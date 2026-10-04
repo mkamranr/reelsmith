@@ -465,11 +465,14 @@ def assemble(m, template_id, duration):
     return out + [cta]
 
 
-def add_scroll(scenes, template_id, image, kind, url='', caption=''):
+def add_scroll(scenes, template_id, image, kind, url='', caption='', info=None):
     """Insert the page scroll-through where it fits the template's story. Replaces any existing one."""
     bp = tpl.get(template_id)['blueprint']
     scenes = [s for s in scenes if s['type'] != 'scroll']
     sc = {'type': 'scroll', 'image': image, 'kind': kind, 'url': url, 'caption': caption}
+    if info: sc.update({k: int(info[k]) for k in ('width', 'height', 'focus_y') if info.get(k) is not None})
+    if 'width' in sc: sc['img_w'] = sc.pop('width')
+    if 'height' in sc: sc['img_h'] = sc.pop('height')
     for t in SCROLL_AFTER.get(bp, ['title']):
         i = next((k for k, s in enumerate(scenes) if s['type'] == t), None)
         if i is not None:

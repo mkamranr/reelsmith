@@ -111,6 +111,19 @@ def render_cover(sb, path, scale=1.0):
             if s['type'] == kind and s not in picks: picks.append(s)
     picks = picks[:3] or sb['scenes'][:1]
     imgs = [_card(s, name, footer) for s in picks]
+    shot = next((x for x in sb['scenes'] if x['type'] == 'scroll' and x.get('image')), None)
+    if shot:
+        import os
+        p = shot['image'] if os.path.isabs(shot['image']) else os.path.join(sb.get('asset_dir') or '', shot['image'])
+        try:
+            page = skia.Image.MakeFromEncoded(skia.Data.MakeFromFileName(p))
+            k = CW / page.width(); top = max(0, (shot.get('focus_y') or 0) - 60)
+            s2 = skia.Surface(CW, CH); c2 = s2.getCanvas(); c2.clear(col(TH.panel))
+            c2.drawImageRect(page, skia.Rect.MakeXYWH(0, top, page.width(), min(page.height() - top, CH / k)),
+                             skia.Rect.MakeXYWH(0, 0, CW, min(page.height() - top, CH / k) * k), SAMP)
+            imgs.insert(0, s2.makeImageSnapshot().withDefaultMipmaps())
+        except Exception:
+            pass
     while len(imgs) < 3: imgs.append(imgs[len(imgs) % len(picks)])
     order = [(imgs[1], -1), (imgs[2], 1), (imgs[1], 2), (imgs[2], -2)]
     for img, d in sorted(order, key=lambda x: -abs(x[1])): _card3d(c, img, 540, 1125, d)

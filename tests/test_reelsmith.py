@@ -539,5 +539,42 @@ class TestLogin(unittest.TestCase):
         finally:
             os.environ.pop('REELSMITH_PASSWORD', None)
 
+
+class TestHandleAndLongPages(unittest.TestCase):
+    INFO = {'width': 860, 'height': 14000, 'focus_y': 3290}
+
+    def _sb(self, tid, D, handle='mkamranr'):
+        from reelsmith.storyboard import sanitize
+        from reelsmith.blueprints import add_scroll
+        base = {'name': 'x', 'handle': handle, 'scenes': [{'type': 'hook', 'big': 'Hi'}, {'type': 'title', 'name': 'x'},
+                {'type': 'statement', 'text': 'One.'}, {'type': 'bullets', 'items': [{'title': 'A'}, {'title': 'B'}]}, {'type': 'cta'}]}
+        sb = sanitize({**base, 'duration': D}, {'template': tid, 'duration': D})
+        sb['scenes'] = add_scroll(sb['scenes'], tid, 'p.png', 'screenshot', 'github.com/o/r', 'See it', self.INFO)
+        return sb
+
+    def test_handle_normalised_and_drawn(self):
+        import skia
+        from reelsmith.engine.timeline import Timeline
+        self.assertEqual(Timeline(self._sb('midnight', 20)).handle, '@mkamranr')
+        self.assertEqual(Timeline(self._sb('midnight', 20, 'mysite.dev')).handle, 'mysite.dev')
+        self.assertEqual(Timeline(self._sb('midnight', 20, '')).handle, '')
+        surf = skia.Surface(1080, 1920)
+        for tid in ('midnight', 'pop', 'terminal', 'broadcast', 'cinema'):      # every handle style draws
+            tl = Timeline(self._sb(tid, 20)); tl.render_frame(surf.getCanvas(), 5 * 30)
+
+    def test_long_readme_scrolls_slowly_and_is_never_dropped(self):
+        from reelsmith.engine.timeline import Timeline
+        for D in (15, 30, 60):
+            tl = Timeline(self._sb('showcase', D))
+            sc = next((x for x in tl.scenes if x.kind == 'scroll'), None)
+            self.assertIsNotNone(sc, D)                                        # survives even at 15 s
+            self.assertLessEqual(sc.dur, 0.45 * D + 0.6)                         # never takes over the video
+            start = 1.0 + sc.ta + sc.tdw
+            offs = [sc.offset(start + f / 30) for f in range(int((sc.dur - start) * 30))]
+            v = [(b - a) * 30 for a, b in zip(offs, offs[1:])]
+            self.assertTrue(all(x >= -1e-6 for x in v))                          # only ever scrolls down
+            self.assertLessEqual(max(v), 210)                                    # reading speed through the README
+        self.assertGreater(Timeline(self._sb('showcase', 60)).scenes[2].dur, Timeline(self._sb('showcase', 30)).scenes[2].dur)
+
 if __name__ == '__main__':
     unittest.main()

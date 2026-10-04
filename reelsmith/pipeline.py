@@ -91,20 +91,21 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
             if x['type'] == 'scroll' and not os.path.isabs(x['image']) and os.path.exists(os.path.join(old_assets, x['image'])):
                 shutil.copy2(os.path.join(old_assets, x['image']), os.path.join(job, x['image']))
     sb['asset_dir'] = job
-    if storyboard is None and inputs.get('url') and inputs.get('screens', True):
+    page_url = inputs.get('url') or (sb.get('url') if storyboard is not None else None)
+    if page_url and inputs.get('screens', True) and not any(x['type'] == 'scroll' for x in sb['scenes']):
         stage('capture', 0)
         log('Capturing the page …')
         info = None
         try:
             from .capture import page_image
-            info = page_image(inputs['url'], source, os.path.join(job, 'page.png'),
+            info = page_image(page_url, source, os.path.join(job, 'page.png'),
                               dark=not tplmod.get(sb['template'])['light'], log=log)
         except Exception as e:
             log(f'  note: no page scroll-through ({e}).')
         if info:
             host = (source or {}).get('kind')
             cap_text = {'github': 'See it on GitHub', 'huggingface': 'On Hugging Face'}.get(host, 'Take a look')
-            sb['scenes'] = bpm.add_scroll(sb['scenes'], sb['template'], 'page.png', info['kind'], sb.get('url', ''), cap_text)
+            sb['scenes'] = bpm.add_scroll(sb['scenes'], sb['template'], 'page.png', info['kind'], sb.get('url', ''), cap_text, info)
             ix = next(i for i, x in enumerate(sb['scenes']) if x['type'] == 'scroll')
             log(f"  {'screenshot' if info['kind'] == 'screenshot' else 'README page'} {info['width']}×{info['height']}, "
                 f"shown after the {sb['scenes'][ix - 1]['type'] if ix else 'start'}")

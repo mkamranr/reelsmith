@@ -23,7 +23,8 @@ SCHEMA = {
     'chapter': {'number': ('s', 6), 'title': ('s', 44), 'body': ('s', 150), 'accent': ('s', 24)},
     'rank': {'rank': ('s', 4), 'title': ('s', 40), 'sub': ('s', 90), 'accent': ('s', 24), 'of': ('i',)},
     'teaser': {'lines': ('l', 34, 4)},
-    'scroll': {'image': ('s', 300), 'kind': ('s', 12), 'url': ('s', 80), 'caption': ('s', 40), 'accent': ('s', 20)},
+    'scroll': {'image': ('s', 300), 'kind': ('s', 12), 'url': ('s', 80), 'caption': ('s', 40), 'accent': ('s', 20),
+               'img_w': ('i',), 'img_h': ('i',), 'focus_y': ('i',)},
 }
 
 CATALOG = """

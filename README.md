@@ -67,6 +67,8 @@ for Instagram, Facebook and YouTube.
   text-to-speech server (Kokoro, OpenAI, …) speaks it; the music ducks under the voice; subtitles come out as `.srt`.
 - **Any language model.** Ollama, vLLM, LM Studio, OpenRouter, OpenAI, Anthropic, or anything OpenAI-compatible.
   Without one, a built-in planner builds the storyboard from the material itself.
+- **Your handle on screen.** Set **Your handle** and it stays visible at the bottom of the whole video, styled per
+  template (a pill, a Pop sticker, a shell prompt, a news strap, or in the film letterbox).
 - **Captions and cover.** Platform-specific captions (Instagram, Facebook, YouTube Shorts title, description and tags)
   and a 9:16 cover whose headline stays inside Instagram's grid crop.
 - **A job queue with history.** Queue as many videos as you like; they render one after another in the background,
@@ -122,9 +124,14 @@ planner pick an accent to suit the content, and every other template keeps its d
 
 ## Page scroll-through
 
-Give a link and the video shows the page itself: a headless browser takes a screenshot in phone layout (dark mode for
-dark templates; on GitHub it starts at the repository, skipping GitHub's own navigation), and a scroll-through scene
-moves down it slowly inside a phone, browser window or card, tilting into place with real perspective. Each template
+Give a link and every template shows the page itself: a headless browser takes a screenshot in phone layout (dark mode
+for dark templates; on GitHub it starts at the repository, skipping GitHub's own navigation, and runs to the end of the
+README), and a scroll-through scene moves down it inside a phone, browser window or card that tilts into place.
+
+Long READMEs are read, not skimmed: the scroll moves briskly past the file list, pauses where the README begins, then
+scrolls at reading speed (never faster than about 200 px a second). The scene grows with the README, up to 45% of the
+video, and is never dropped to fit a short video; in a short video it shows the start of a long README rather than
+racing through it, so give a long README a longer video (60–90 s) to see more of it. Each template
 puts it where it fits its story: after the title in the demo and the screen tour, before the countdown in Pop, after the
 report in Broadcast.
 
@@ -246,7 +253,8 @@ then `reelsmith voice test` and `reelsmith generate … --voiceover`.
 
 ### Web app
 
-Fill in the brief (topic, description and/or link, template, length, accent colour, your handle), choose **Draft preview**
+Fill in the brief (topic, description and/or link, template, length, accent colour, your handle: when set, it is
+shown at the bottom of the video), choose **Draft preview**
 (540p, about 4× faster) or **Full 1080 × 1920**, optionally 2K/4K and a voice-over, then:
 
 - **Make video** adds a job to the queue. Keep adding more; they render one after another.

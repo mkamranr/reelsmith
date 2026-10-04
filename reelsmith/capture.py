@@ -20,6 +20,9 @@ MOBILE_UA = ('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit
              'Version/17.0 Mobile/15E148 Safari/604.1')
 # where the interesting part of a page starts, per site (skips global navigation)
 START = {'github.com': ['#repository-container-header', 'main'], 'huggingface.co': ['main', 'section']}
+# where the README itself starts: above it the video moves briskly, through it slowly
+README_SEL = {'github.com': ['article.markdown-body', '#readme', '[data-testid="readme"]'], 'huggingface.co': ['.model-card-content', '.prose']}
+SCALE = 2.0      # 430 css px → 860 px wide: sharp in the phone frame, half the memory of 2.5× for long pages
 # banners and prompts that would sit on top of the content
 HIDE_CSS = """
 [id*="cookie" i], [class*="cookie" i], [aria-label*="cookie" i], .js-header-wrapper, header.HeaderMktg,
@@ -57,8 +60,10 @@ def browser_available():
     return _browser_ok
 
 
-def capture(url, out_png, dark=False, max_height=3200, timeout=45):
-    """Screenshot `url` in phone layout. Returns {'path', 'width', 'height', 'kind': 'screenshot'}."""
+def capture(url, out_png, dark=False, max_height=7000, timeout=45):
+    """Screenshot `url` in phone layout, long enough for the whole README of most repos.
+    Returns {'path', 'width', 'height', 'kind': 'screenshot', 'focus_y'} where focus_y is where the README starts in the
+    image (the scroll moves briskly above it and slowly through it)."""
     from .sources import _guard, SourceError
     try:
         _guard(url)
@@ -87,7 +92,7 @@ def capture(url, out_png, dark=False, max_height=3200, timeout=45):
         except Exception as e:
             raise CaptureError(f'Could not start a browser: {str(e).splitlines()[0]}') from e
         try:
-            ctx = b.new_context(viewport={'width': 430, 'height': 932}, device_scale_factor=2.5, is_mobile=True,
+            ctx = b.new_context(viewport={'width': 430, 'height': 932}, device_scale_factor=SCALE, is_mobile=True,
                                 has_touch=True, user_agent=MOBILE_UA, color_scheme='dark' if dark else 'light',
                                 locale='en-US', bypass_csp=True)   # our banner-hiding CSS must apply
             page = ctx.new_page()
@@ -103,6 +108,10 @@ def capture(url, out_png, dark=False, max_height=3200, timeout=45):
             for sel in START.get(host, []):
                 y = page.evaluate("s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect().top + window.scrollY : null }", sel)
                 if y is not None: start = max(0, int(y) - 8); break
+            focus = None
+            for sel in README_SEL.get(host, []):
+                y = page.evaluate("s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect().top + window.scrollY : null }", sel)
+                if y is not None: focus = max(0, int(y) - start); break
             width = page.evaluate('document.documentElement.clientWidth') or 430
             total = page.evaluate('document.documentElement.scrollHeight')
             h = max(400, min(max_height, total - start))
@@ -114,12 +123,14 @@ def capture(url, out_png, dark=False, max_height=3200, timeout=45):
         finally:
             b.close()
     from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
     with Image.open(out_png) as im: w, hh = im.size
-    return {'path': out_png, 'width': w, 'height': hh, 'kind': 'screenshot'}
+    fy = int((focus or 0) * SCALE)
+    return {'path': out_png, 'width': w, 'height': hh, 'kind': 'screenshot', 'focus_y': fy if fy < hh - 400 else 0}
 
 
 # ------------------------------------------------------------------ fallback: draw the README as a page
-def readme_page(md, title, url, facts, out_png, dark=False, width=1080, max_height=8000):
+def readme_page(md, title, url, facts, out_png, dark=False, width=1080, max_height=16000):
     import skia
     from .engine.lib import font_file
     bg, fg, mu, line, codebg, link = ((13, 17, 23), (230, 237, 243), (139, 148, 158), (48, 54, 61), (22, 27, 34), (68, 147, 248)) if dark \
@@ -218,7 +229,7 @@ def readme_page(md, title, url, facts, out_png, dark=False, width=1080, max_heig
             c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(pad, y0, inner, h), 14, 14), skia.Paint(AntiAlias=True, Color=C(codebg)))
             for i, ln in enumerate(lines): c.drawString(ln, pad + 24, y0 + 44 + i * 36, f, skia.Paint(AntiAlias=True, Color=C(fg)))
     surf.makeImageSnapshot().save(out_png, skia.kPNG)
-    return {'path': out_png, 'width': width, 'height': height, 'kind': 'readme'}
+    return {'path': out_png, 'width': width, 'height': height, 'kind': 'readme', 'focus_y': 0}
 
 
 def page_image(url, source, out_png, dark=False, log=print):
