@@ -49,7 +49,7 @@ def slots(plan, total, speed=1.0):
     """Per scene: (start, available seconds, word budget)."""
     out = []
     for i, p in enumerate(plan):
-        lead = 0.1 if i == 0 else LEAD
+        lead = 0.05 if i == 0 else LEAD
         tail = 0.9 if i == len(plan) - 1 else TAIL          # the video fades out at the end
         avail = max(0.8, p['duration'] - lead - tail)
         out.append((p['start'] + lead, avail, max(3, int(avail * WPS * speed))))
@@ -160,6 +160,9 @@ def write_with_llm(sb, plan, sl, source=None, log=print):
     except Exception:
         pass
     if sb.get('topic'): user += f"Angle: {sb['topic']}\n"
+    if sb.get('audience'): user += f"Audience: {sb['audience']}. Talk to them.\n"
+    cold = next((s for s in sb['scenes'] if s['type'] == 'coldopen'), None)
+    if cold: user += f"Line 1 is spoken over the opening text \"{cold['text']}\": say exactly that, or a tighter version of it. No greeting.\n"
     user += f"\nSCENES ({len(plan)}):\n{desc}\n"
     if source and source.get('text'):
         user += f"\n<source url=\"{source.get('url')}\">\n{source['text'][:4000]}\n</source>\n"
@@ -192,7 +195,8 @@ def write_heuristic(sb, plan, sl):
     out = []
     for s, (_, _, w) in zip(sb['scenes'], sl):
         k = s['type']
-        if k == 'hook': t = ' '.join(x for x in (s.get('kicker'), s.get('big'), s.get('punch')) if x) + '.'
+        if k == 'coldopen': t = s.get('text', '')
+        elif k == 'hook': t = ' '.join(x for x in (s.get('kicker'), s.get('big'), s.get('punch')) if x) + '.'
         elif k == 'title': t = f"Meet {s.get('name', sb.get('name'))}. {s.get('tagline', '')}"
         elif k == 'statement': t = s.get('text', '')
         elif k in ('bullets', 'features'):

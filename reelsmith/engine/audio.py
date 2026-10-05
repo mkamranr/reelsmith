@@ -352,7 +352,7 @@ def duck_envelope(voice, depth):
     return 1 - depth * lp(env, 20, 1)
 
 
-def render_audio(events, D, groove_start, cta_start, path, music_gain=0.5, voice=None, style=None, sfx_gain=None):
+def render_audio(events, D, groove_start, cta_start, path, music_gain=0.5, voice=None, style=None, sfx_gain=None, loop=False):
     """`voice`: optional mono float array at SR (already placed in time and levelled). Music and SFX are ducked
     under it and it is mixed on top."""
     N = int(SR * D)
@@ -380,6 +380,6 @@ def render_audio(events, D, groove_start, cta_start, path, music_gain=0.5, voice
     mix /= np.abs(mix).max() + 1e-9
     # ceiling ~-3 dBFS: AAC overshoots by 2-3 dB on dense, saturated material, which clipped at 0.9
     mix = np.tanh(mix * 1.6) / np.tanh(1.6) * 0.65
-    fn = int(SR * 0.6); fade = np.ones(N); fade[-fn:] = np.linspace(1, 0, fn) ** 2
+    fn = int(SR * (0.25 if loop else 0.6)); fade = np.ones(N); fade[-fn:] = np.linspace(1, 0, fn) ** 2
     mix *= fade[:, None]
     wavfile.write(path, SR, (mix * 32767).astype(np.int16))

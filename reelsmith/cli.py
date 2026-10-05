@@ -11,13 +11,18 @@ def main(argv=None):
     g.add_argument('--topic', default='', help='topic or angle, e.g. "why this beats doing it by hand"')
     g.add_argument('--description', default='', help='free-text description of the product/idea')
     g.add_argument('--url', default='', help='GitHub repo, Hugging Face model/dataset, or any web page')
-    g.add_argument('--duration', type=float, default=45, help='seconds (10-120, default 45)')
+    g.add_argument('--duration', type=float, default=15, help='seconds (6-120, default 15; 7-15 s gets finished most often)')
     g.add_argument('--template', default='', help='visual template: midnight, editorial, terminal, pop, minimal, aurora (see `reelsmith templates`)')
     g.add_argument('--accent', default='', help='hex accent colour, e.g. "#F0B429" (default: chosen by the planner)')
     g.add_argument('--handle', default='', help='your @handle, used in captions and cover')
     g.add_argument('--draft', action='store_true', help='540x960 fast preview instead of 1080x1920')
     g.add_argument('--upscale', choices=['2k', '4k'], help='also produce a 1440x2560 (2k) or 2160x3840 (4k) file')
     g.add_argument('--voiceover', action='store_true', help='narrate the video (needs a voice set up: Settings → Voice)')
+    g.add_argument('--audience', default='', help='who it is for, e.g. "indie developers" (sharpens hook, script and hashtags)')
+    g.add_argument('--engage', default='auto', choices=['auto', 'save', 'comment', 'share', 'follow', 'none'], help='what the closing card asks viewers to do')
+    g.add_argument('--keyword', default='', help='keyword for --engage comment ("Comment LINK for the link"); only if you will reply')
+    g.add_argument('--no-hook', action='store_true', help='skip the cold-open hook (not recommended)')
+    g.add_argument('--no-loop', action='store_true', help='fade out instead of looping back to the first frame')
     g.add_argument('--no-screens', action='store_true', help='skip the page scroll-through screenshot')
     g.add_argument('--no-captions', action='store_true', help="don't put the spoken words on screen (voice-over only)")
     g.add_argument('--voice', default=None, help='voice name for this video (default: the one in your voice settings)')
@@ -102,6 +107,8 @@ def main(argv=None):
         if a.cmd == 'plan':
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
             inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
+            inputs.update(audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
+                          retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             src = fetch_source(a.url) if a.url else None
             sb, how = sbm.plan(inputs, src, use_llm=not a.no_llm)
             json.dump(sb, open(a.out, 'w'), indent=2, ensure_ascii=False)
@@ -112,6 +119,8 @@ def main(argv=None):
                 ap.error('give at least one of --topic, --description, --url')
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
             inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
+            inputs.update(audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
+                          retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             pipeline.generate(inputs, a.out, 'draft' if a.draft else 'final', a.workers, use_llm=not a.no_llm, progress=_bar(),
                               upscale=a.upscale, upscale_method=a.upscale_method,
                               voiceover=a.voiceover, voice=a.voice)

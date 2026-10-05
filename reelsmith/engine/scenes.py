@@ -764,6 +764,23 @@ class Terminal(Scene):
 
 
 # ============================== 10. CTA ==============================
+def _engage_icon(c, kind, cx, cy, rgb):
+    """Small drawn icons (the bundled fonts have no emoji)."""
+    p = paint(rgb, 1, stroke=4.5, cap_round=True)
+    pth = skia.Path()
+    if kind == 'comment':
+        pth.addRRect(skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(cx - 17, cy - 15, 34, 24), 8, 8))
+        pth.moveTo(cx - 6, cy + 9); pth.lineTo(cx - 12, cy + 17); pth.lineTo(cx + 2, cy + 9)
+    elif kind == 'share':
+        pth.moveTo(cx - 14, cy + 2); pth.lineTo(cx + 15, cy - 13); pth.lineTo(cx + 2, cy + 15); pth.lineTo(cx - 2, cy + 2); pth.close()
+    elif kind == 'follow':
+        c.drawCircle(cx, cy, 16, p); pth.moveTo(cx - 8, cy); pth.lineTo(cx + 8, cy); pth.moveTo(cx, cy - 8); pth.lineTo(cx, cy + 8)
+    else:                                                            # save: a bookmark
+        pth.moveTo(cx - 11, cy - 16); pth.lineTo(cx + 11, cy - 16); pth.lineTo(cx + 11, cy + 16); pth.lineTo(cx, cy + 7)
+        pth.lineTo(cx - 11, cy + 16); pth.close()
+    c.drawPath(pth, p)
+
+
 class CTA(Scene):
     kind = 'cta'
 
@@ -779,6 +796,7 @@ class CTA(Scene):
         self.at(0.0, 'boom', 1.0); self.shake(0.02, 16, 0.5)
         self.at(0.05, 'logo', 0.9)
         if S(self.d, 'url'): self.at(0.9, 'tick', 0.5)
+        if S(self.d, 'engage'): self.at(1.15, 'pop', 0.7, f=700)
 
     def draw(self, c, t):
         self.cam(c, t, 540, 960, 1.0 + 0.03 * prog(t, 0, self.dur))
@@ -801,6 +819,17 @@ class CTA(Scene):
         if tag:
             y += para(c, tag, 540, y, 34, prog(t, 1.2, 1.7), max_lines=2) + 30
         headline(c, S(self.d, 'line'), S(self.d, 'accent'), 540, y + 50, 56, prog(t, 1.6, 2.1), 800, max_lines=2)
+        eng = S(self.d, 'engage')
+        if eng:
+            pe = prog(t, 1.15, 1.55)
+            if pe > 0:
+                yy = min(y + 50 + headline_height(S(self.d, 'line'), 56) + 70, 1600)
+                f = I(800, fit_size(eng, 'inter', 800, 760, 38, 22)); w = tw(eng, f) + 120
+                with xf(c, 0, 0, max(0.001, e_back(pe, 2.2)), -2, 540, yy + 40):
+                    shadow(c, 540 - w / 2, yy, w, 84, 42, 0.5, 24, 10)
+                    rrect(c, 540 - w / 2, yy, w, 84, 42, TH.acc)
+                    _engage_icon(c, S(self.d, 'engage_kind') or 'save', 540 - w / 2 + 52, yy + 42, TH.ink)
+                    text(c, eng, 540 - w / 2 + 88, yy + 55, f, TH.ink)
 
 
 # ============================== 11. QUOTE ==============================
@@ -1112,5 +1141,49 @@ class Scroll(Scene):
             pill(c, 540, self.top + self.fh + 40, 'README', M(700, 22), TH.muted, TH.surf, prog(t, 0.8, 1.2), pad=16, h=40, align='c', track=3)
 
 
+# ============================== 16. COLD OPEN (the first two seconds) ==============================
+class Coldopen(Scene):
+    """The hook as big on-screen text, fully visible from frame 0 (muted viewers decide in the first second)."""
+    kind = 'coldopen'
+
+    @staticmethod
+    def budget(d):
+        n = len(S(d, 'text').split())
+        dur = clamp(0.9 + n * 0.28, 1.8, 3.0)
+        return dur * 0.85, dur
+
+    def setup(self):
+        self.text = S(self.d, 'text')
+        self.size, self.lines = _layout(self.text, 132, 900, 960, 4, -0.03)
+
+    def sounds(self):
+        self.at(0.0, 'impact', 1.0); self.shake(0.0, 9, 0.3)
+        self.at(0.02, 'swish', 0.4)
+
+    def draw(self, c, t):
+        self.cam(c, t, 540, 930, 1.07 - 0.07 * e_out3(prog(t, 0, 0.9)))       # punch in, already readable
+        f = I(900, self.size); tr = -0.03 * self.size * TH.track
+        acc = {_norm(w) for w in S(self.d, 'accent').split() if _norm(w)}
+        n = len(self.lines); lh = self.size * 1.06
+        y0 = 930 - lh * n / 2 + self.size * 0.82
+        left = TH.align == 'l'
+        sub = S(self.d, 'sub')
+        if sub:
+            fs = fit_size(sub.upper(), 'mono', 800, 900, 30, 18, track_em=0.12)
+            text(c, sub.upper(), TH.margin if left else 540, y0 - self.size - 34, M(800, fs), TH.acc, 1, 'l' if left else 'c', track=fs * 0.12)
+        sp = tw(' ', f)
+        ul = e_out5(prog(t, 0.12, 0.55))
+        for li, ln in enumerate(self.lines):
+            y = y0 + li * lh
+            x = TH.margin if left else 540 - tw(ln, f, tr) / 2
+            for w in ln.split(' '):
+                ww = tw(w, f, tr)
+                is_acc = _norm(w) in acc
+                text(c, w, x, y, f, TH.text, 1, shader=acc_grad(x, y - self.size, x + ww, y) if is_acc else None, track=tr)
+                if is_acc and ul > 0:
+                    rrect(c, x, y + self.size * 0.14, ww * ul, max(6, self.size * 0.075), 3, shader=acc_grad(x, 0, x + ww, 0))
+                x += ww + sp + tr
+
+
 REGISTRY = {cls.kind: cls for cls in (Hook, Title, Code, Statement, Bullets, Features, Stats, Steps, Terminal, CTA,
-                                      Quote, Chapter, Rank, Teaser, Scroll)}
+                                      Quote, Chapter, Rank, Teaser, Scroll, Coldopen)}

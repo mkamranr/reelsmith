@@ -67,7 +67,7 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     if storyboard is None:
         stage('planning', 0)
         log('Planning storyboard …')
-        sb, how = sbmod.plan(inputs, source, use_llm=use_llm)
+        sb, how = sbmod.plan(inputs, source, use_llm=use_llm, log=log)
         log(f"  planned by {how}: {' → '.join(s['type'] for s in sb['scenes'])}")
     else:
         sb = sbmod.sanitize(storyboard, inputs, {'url': storyboard.get('url', '')} if storyboard.get('url') else None)
@@ -156,13 +156,27 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     with open(os.path.join(job, 'captions.json'), 'w') as f: json.dump(c, f, indent=2, ensure_ascii=False)
     with open(os.path.join(job, 'captions.md'), 'w') as f: f.write(cap.to_markdown(c))
 
+    first = sb['scenes'][0] if sb['scenes'] else {}
+    cta = next((x for x in sb['scenes'] if x['type'] == 'cta'), {})
+    tags = len(re.findall(r'(?:^|\s)#\w+', c.get('instagram', '')))
+    checks = [
+        {'label': 'Hook on screen from the first frame', 'ok': first.get('type') == 'coldopen', 'detail': first.get('text', '')},
+        {'label': 'Short enough to be finished', 'ok': sb['duration'] <= 15 if sb['duration'] <= 30 else False,
+         'detail': f"{sb['duration']:.0f}s" + ('' if sb['duration'] <= 15 else ': 7-15 s gets the highest completion while an account is new')},
+        {'label': 'Readable with the sound off', 'ok': (not voiceover) or bool(sb.get('spoken')),
+         'detail': 'spoken words on screen' if sb.get('spoken') else ('on-screen text only' if not voiceover else 'turn on "Show the spoken words"')},
+        {'label': 'Asks for a save, comment or share', 'ok': bool(cta.get('engage')), 'detail': cta.get('engage', '')},
+        {'label': 'Niche stated', 'ok': bool(sb.get('audience')), 'detail': sb.get('audience') or 'set "Who is it for" so hook, captions and hashtags target one audience'},
+        {'label': '3-5 specific hashtags', 'ok': 3 <= tags <= 5, 'detail': f'{tags} in the Instagram caption'},
+        {'label': 'Loops back to the start', 'ok': bool(sb.get('loop')), 'detail': ''},
+    ]
     manifest = {'job': os.path.basename(job), 'dir': job, 'name': sb['name'], 'duration': sb['duration'], 'quality': quality,
                 'resolution': (TARGETS[upscale]['size'] if upscale else ((540, 960) if quality == 'draft' else (1080, 1920))),
                 'upscale': upscale, 'upscale_method': upscale_method if upscale else None,
                 'template': sb.get('template'),
                 'voiceover': bool(voiceover), 'voice': (voice or (s_tts or {}).get('voice')) if voiceover else None,
                 'planned_by': how, 'captions_by': c.get('source'), 'seconds': round(time.time() - t0, 1),
-                'files': files}
+                'files': files, 'checks': checks, 'hook': sb.get('hook_line'), 'hook_alternatives': sb.get('hook_alternatives') or []}
     with open(os.path.join(job, 'manifest.json'), 'w') as f: json.dump(manifest, f, indent=2)
     stage('done', 1)
     log(f"Done in {manifest['seconds']}s → {job}")

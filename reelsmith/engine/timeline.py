@@ -70,6 +70,7 @@ class Timeline:
         self.name = sb.get('name') or sb.get('title') or 'Reelsmith'
         self.ctx = Ctx(self.name)
         self.ctx.asset_dir = sb.get('asset_dir') or ''
+        self.loop = bool(sb.get('loop', False))
         self.ctx.handle = bool((sb.get('handle') or '').strip())
         plan = allocate(sb['scenes'], self.duration, self.beat)
         self.scenes = []
@@ -367,6 +368,21 @@ class Timeline:
             sc.draw(c, tl); c.restore()
 
     def render_frame(self, c, f):
+        """Frame 0 is a full, readable frame (no fade-in: muted viewers decide in the first second). With `loop`, the
+        last 0.45 s blends into an exact redraw of frame 0 so a replay is seamless; otherwise it fades out."""
+        t = f / FPS
+        self._draw(c, f)
+        if self.loop:
+            pl = prog(t, self.duration - 0.45, self.duration)
+            if pl > 0:
+                c.saveLayer(None, skia.Paint(Alphaf=e_io3(pl)))
+                self._draw(c, 0)
+                c.restore()
+        else:
+            fo = prog(t, self.duration - 0.7, self.duration)
+            if fo > 0: c.drawRect(skia.Rect.MakeWH(W, H), paint(TH.bg, fo))
+
+    def _draw(self, c, f):
         t = f / FPS
         title_like = [s for s in self.scenes if s.kind == 'title']
         inten = 1.0
@@ -430,5 +446,4 @@ class Timeline:
         self.hud(c, t)
         self.draw_handle(c, t)
         self.post_fx(c, f)
-        fo = prog(t, self.duration - 0.7, self.duration); fi = 1 - prog(t, 0, 0.25)
-        if max(fo, fi) > 0: c.drawRect(skia.Rect.MakeWH(W, H), paint(TH.bg, max(fo, fi)))
+

@@ -28,7 +28,7 @@ ALLOWED = {
     'tour': {'hook', 'title', 'features', 'bullets', 'stats', 'steps', 'statement', 'cta'},
     'news': {'title', 'statement', 'bullets', 'stats', 'quote', 'steps', 'cta'},
 }
-for _v in ALLOWED.values(): _v.add('scroll')          # every structure can show the page
+for _v in ALLOWED.values(): _v.update({'scroll', 'coldopen'})   # every structure can show the page and open cold
 OPENING = {'demo': 'hook', 'story': 'quote', 'walkthrough': 'terminal', 'listicle': 'hook', 'keynote': 'title', 'trailer': 'teaser',
            'documentary': 'teaser', 'tour': 'hook', 'news': 'title'}
 # where the page scroll-through goes in each structure: after the first scene of one of these types
@@ -221,9 +221,31 @@ def _merge_bullets(scenes):
     return out
 
 
-def conform(scenes, template_id, duration, name='', url='', material=None):
+def conform(scenes, template_id, duration, name='', url='', material=None, micro=False):
     """Make a scene list follow the template's structure. Returns a new list (sanitized again by the caller)."""
     bp = tpl.get(template_id)['blueprint']
+    cold = next((s for s in scenes if s['type'] == 'coldopen'), None)
+    scenes = [s for s in scenes if s['type'] != 'coldopen']
+    if micro:
+        return _micro(cold, scenes, bp, name, url)
+    out = _conform(scenes, template_id, duration, name, url, material, bp)
+    return ([cold] if cold else []) + out
+
+
+PAYOFF = ['scroll', 'rank', 'stats', 'code', 'terminal', 'features', 'chapter', 'statement', 'bullets', 'steps', 'quote', 'teaser', 'title']
+
+
+def _micro(cold, scenes, bp, name, url):
+    """6-10 s videos: the hook, the single strongest payoff, the ask. Short videos that get finished get pushed."""
+    cta = next((s for s in scenes if s['type'] == 'cta'), {'type': 'cta', 'name': name, 'url': url})
+    body = [s for s in scenes if s['type'] not in ('cta', 'hook')]
+    pay = next((s for k in PAYOFF for s in body if s['type'] == k), None)
+    if pay and pay['type'] == 'rank': pay = {**pay, 'rank': '1', 'of': 1}
+    opener = cold or next((s for s in scenes if s['type'] == 'hook'), None)
+    return [x for x in (opener, pay, cta) if x]
+
+
+def _conform(scenes, template_id, duration, name, url, material, bp):
     has_numbers = any(s['type'] == 'stats' for s in scenes)
     c = counts(bp, duration, has_numbers)
     cta = next((s for s in scenes if s['type'] == 'cta'), {'type': 'cta', 'name': name, 'url': url})

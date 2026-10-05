@@ -26,7 +26,9 @@ MIME = {'.mp4': 'video/mp4', '.png': 'image/png', '.json': 'application/json', '
 def make_runner(out_root):
     def run(job, hooks):
         p = job['payload']
-        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template')}
+        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword')}
+        inputs['retention_hook'] = p.get('retention_hook', True) is not False
+        inputs['loop'] = p.get('loop', True) is not False
         inputs['restructure'] = bool(p.get('restructure'))
         inputs['screens'] = p.get('screens', True) is not False
         inputs['burn_captions'] = p.get('burn_captions', True) is not False
@@ -182,7 +184,7 @@ def make_handler(jobs, port):
                     except KeyError:
                         return self._send(404, {'error': 'No such job.'})
                 if path == '/api/plan':
-                    inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template')}
+                    inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword')}
                     inputs['duration'] = float(p.get('duration') or 45)
                     src = fetch_source(p['url']) if p.get('url') else None
                     sb, how = sbm.plan(inputs, src, use_llm=not p.get('no_llm'))

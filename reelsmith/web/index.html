@@ -132,6 +132,15 @@
   .dlg-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
   .dlg-actions .spacer { flex: 1; }
   .link-btn { border: 0; background: none; color: var(--bad); cursor: pointer; padding: 11px 4px; font-weight: 600; }
+  .presets { margin-top: 8px; }
+  .presets button { font-size: 13px; }
+  ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
+  ul.checks li b { display: inline-block; width: 20px; }
+  ul.checks li.ok b { color: var(--ok); } ul.checks li.no b { color: var(--bad); }
+  ul.checks small { display: block; padding-left: 20px; color: var(--ink-3); }
+  .hook-now { font: 700 20px/1.3 var(--display); margin: 0; }
+  .alt { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .alt small { color: var(--ink-3); }
   .tpl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .tpl { border: 1px solid var(--line); background: var(--well); border-radius: 11px; padding: 6px 6px 8px; text-align: left; cursor: pointer; display: grid; gap: 6px; align-content: start; }
   .tpl img { width: 100%; aspect-ratio: 9 / 16; border-radius: 7px; display: block; background: var(--line); object-fit: cover; }
@@ -288,6 +297,9 @@
     <label for="topic">Topic or angle <small>what should viewers take away?</small></label>
     <input id="topic" type="text" placeholder="Stop designing carousels by hand">
 
+    <label for="audience">Who is it for <small>one niche, so the platform knows who to show it to</small></label>
+    <input id="audience" type="text" placeholder="indie developers, Python beginners, small-shop owners…">
+
     <label for="description">Description <small>optional</small></label>
     <textarea id="description" placeholder="What it is, who it's for, what makes it different."></textarea>
 
@@ -300,7 +312,18 @@
     <div class="tpl-grid" id="tpl-grid" role="radiogroup" aria-labelledby="tpl-l"></div>
 
     <label for="duration">Length</label>
-    <div class="row"><input id="duration" type="range" min="15" max="90" step="5" value="45"><div class="len"><span id="dur-v">45</span><small>s</small></div></div>
+    <div class="row"><input id="duration" type="range" min="6" max="90" step="1" value="15"><div class="len"><span id="dur-v">15</span><small>s</small></div></div>
+    <div class="seg presets" role="group" aria-label="Length presets">
+      <button type="button" data-d="8">8 s hook test</button><button type="button" data-d="15">15 s</button>
+      <button type="button" data-d="30">30 s</button><button type="button" data-d="60">60 s</button>
+    </div>
+    <p class="hint" style="margin:6px 0 0">New account or stuck at ~150 views? Post 7-15 s videos: finished views are what get a Reel shown to more people.</p>
+
+    <label for="engage">Ask viewers to <small>shown on the closing card and in the caption</small></label>
+    <div class="row"><select id="engage">
+        <option value="auto">Save it (recommended)</option><option value="comment">Comment a keyword</option>
+        <option value="share">Share it</option><option value="follow">Follow</option><option value="none">Nothing</option></select>
+      <input id="keyword" type="text" placeholder="keyword, e.g. LINK" hidden></div>
 
     <div class="row" style="align-items:start">
       <div>
@@ -409,7 +432,7 @@
 const $ = (id) => document.getElementById(id);
 let template = 'midnight', templates = [], quality = 'draft', upscale = '', polling = null, current = null, openId = null, jobsTimer = null, voiceReady = false, lastDetail = '';
 
-const STAGES = { capture: 'Capturing the page', starting: 'Starting', narration: 'Writing and recording the voice-over', cancelled: 'Cancelled', interrupted: 'Interrupted', error: 'Failed', queued: 'Waiting to start', reading: 'Reading the link', planning: 'Planning the storyboard', audio: 'Synthesizing sound',
+const STAGES = { capture: 'Capturing the page', planning: 'Planning the story and writing hooks', starting: 'Starting', narration: 'Writing and recording the voice-over', cancelled: 'Cancelled', interrupted: 'Interrupted', error: 'Failed', queued: 'Waiting to start', reading: 'Reading the link', planning: 'Planning the storyboard', audio: 'Synthesizing sound',
   rendering: 'Rendering frames', encode: 'Encoding video', upscale: 'Upscaling with ffmpeg', cover: 'Making the cover', captions: 'Writing captions', done: 'Done' };
 
 function setAccent(hex) {
@@ -422,6 +445,8 @@ function setAccent(hex) {
 $('accent').addEventListener('input', e => { $('accent-hex').value = e.target.value.toUpperCase(); setAccent(e.target.value); });
 $('accent-hex').addEventListener('input', e => { if (/^#?[0-9a-f]{6}$/i.test(e.target.value)) { $('accent').value = '#' + e.target.value.replace('#', '').toLowerCase(); setAccent(e.target.value); } });
 $('duration').addEventListener('input', e => $('dur-v').textContent = e.target.value);
+document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => { $('duration').value = b.dataset.d; $('dur-v').textContent = b.dataset.d; }));
+$('engage').addEventListener('change', () => { $('keyword').hidden = $('engage').value !== 'comment'; });
 function syncUpscale() {
   const off = quality === 'draft';
   $('up-box').disabled = off;
@@ -438,7 +463,8 @@ document.querySelectorAll('#view-tabs button').forEach(b => b.addEventListener('
 
 function brief() {
   return { template, topic: $('topic').value.trim(), description: $('description').value.trim(), url: $('url').value.trim(),
-           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, quality, ...upOpts(), ...voOpts() };
+           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, audience: $('audience').value.trim(),
+           engage: $('engage').value === 'auto' ? 'save' : $('engage').value, keyword: $('keyword').value.trim(), quality, ...upOpts(), ...voOpts() };
 }
 function voOpts() {
   return $('vo').checked ? { voiceover: true, voice: $('vo-voice').value.trim() || undefined, burn_captions: $('burn').checked } : {};
@@ -654,13 +680,35 @@ function showResult(r) {
   $('downloads').innerHTML = [...vids, ['cover.png', `Download cover (${res})`], ...extra, ['captions.md', 'Download captions'], ['storyboard.json', 'Download storyboard']]
     .map(([f, l]) => `<a href="${r.base}${f}?dl=1">${l}</a>`).join('');
   const c = r.captions, yt = c.youtube;
-  const cards = [['Instagram', c.instagram], ['Facebook', c.facebook], ['YouTube title', yt.title],
+  const cards = [['Instagram', c.instagram], ...(c.pinned_comment ? [['Pinned comment', c.pinned_comment]] : []), ['Facebook', c.facebook], ['YouTube title', yt.title],
                  ['YouTube description', yt.description], ['YouTube tags', (yt.tags || []).join(', ')]];
   $('caps').innerHTML = cards.map(([t, body], i) =>
     `<article class="cap"><header><h3>${t}</h3><button class="copy" data-i="${i}" type="button">Copy</button></header><pre>${esc(body)}</pre></article>`).join('');
   $('caps').querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
     flash(b, await copyText(cards[b.dataset.i][1], b.closest('.cap').querySelector('pre')));
   }));
+  // before you post: retention checklist + the hook and its alternatives
+  if (m.checks) {
+    const el = document.createElement('article'); el.className = 'cap';
+    el.innerHTML = `<header><h3>Before you post</h3></header><ul class="checks">${m.checks.map(k =>
+      `<li class="${k.ok ? 'ok' : 'no'}"><b>${k.ok ? '✓' : '!'}</b> ${esc(k.label)}${k.detail ? `<small>${esc(k.detail)}</small>` : ''}</li>`).join('')}</ul>`;
+    $('caps').prepend(el);
+  }
+  if (m.hook) {
+    const el = document.createElement('article'); el.className = 'cap';
+    const alts = m.hook_alternatives || [];
+    el.innerHTML = `<header><h3>Hook</h3></header><p class="hook-now">“${esc(m.hook.text)}”</p>` + (alts.length ?
+      `<p class="hint" style="margin:8px 0">Not landing? Post a version with another hook and compare the first-3-second retention in Insights.</p>` +
+      alts.map((h, i) => `<div class="alt"><span>“${esc(h.text)}” <small>${esc(h.pattern || '')}</small></span><button class="copy" data-i="${i}" type="button">Use this hook</button></div>`).join('') : '');
+    el.querySelectorAll('.alt button').forEach(b => b.addEventListener('click', () => {
+      const h = alts[+b.dataset.i]; const sb = JSON.parse(JSON.stringify(r.storyboard)); delete sb.plan;
+      const co = sb.scenes.find(x => x.type === 'coldopen');
+      if (co) { co.text = h.text; co.accent = h.accent || ''; } else sb.scenes.unshift({ type: 'coldopen', text: h.text, accent: h.accent || '' });
+      sb.hook_line = h; sb.hook_alternatives = [m.hook, ...alts.filter((_, j) => j !== +b.dataset.i)];
+      start('/api/render', { storyboard: sb, quality, handle: sb.handle || '', duration: sb.duration, screens: false, ...voOpts() });
+    }));
+    $('caps').prepend(el);
+  }
   if (m.files && m.files.narration) {
     fetch(`${r.base}narration.json`).then(x => x.json()).then(n => {
       if (current !== r) return;

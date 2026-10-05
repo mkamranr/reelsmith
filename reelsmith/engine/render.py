@@ -55,7 +55,7 @@ def render_video(sb, out_path, quality='final', workers=None, progress=None, sca
         if progress: progress('audio', 0.0)
         wav = os.path.join(tmp, 'audio.wav')
         groove = tl.scenes[1].t0 + tl.scenes[1].dur if len(tl.scenes) > 2 else 0.0
-        render_audio(tl.events, tl.duration, groove, tl.scenes[-1].t0, wav, voice=voice, style=TH.music, sfx_gain=TH.sfx)
+        render_audio(tl.events, tl.duration, groove, tl.scenes[-1].t0, wav, voice=voice, style=TH.music, sfx_gain=TH.sfx, loop=tl.loop)
 
         ctx = mp.get_context('spawn' if os.name != 'posix' or os.uname().sysname == 'Darwin' else 'fork')
         counter = ctx.Value('i', 0)

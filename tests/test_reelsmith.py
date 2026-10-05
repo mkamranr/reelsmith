@@ -254,7 +254,7 @@ class TestNarration(unittest.TestCase):
         from reelsmith.narration import slots, srt
         plan = [{'type': 'hook', 'start': 0, 'duration': 4}, {'type': 'cta', 'start': 4, 'duration': 5}]
         sl = slots(plan, 9)
-        self.assertAlmostEqual(sl[0][0], 0.1); self.assertLess(sl[1][1], 5 - 0.9 + 0.01)   # last scene leaves room for the fade
+        self.assertAlmostEqual(sl[0][0], 0.05); self.assertLess(sl[1][1], 5 - 0.9 + 0.01)  # speech starts with the cold open; room for the end
         out = srt([{'start': 0.1, 'end': 3.0, 'text': 'A fairly long line that has to be split across two subtitle cues.'}])
         self.assertIn('00:00:00,100 -->', out); self.assertEqual(out.count('-->'), 2)
 
@@ -481,8 +481,8 @@ class TestStructures(unittest.TestCase):
             ed, _ = sbm.plan({'template': 'editorial', 'duration': 30}, self.SRC)
         finally:
             llm.complete_json, llm.provider = saved
-        self.assertEqual([s['type'] for s in pop['scenes']], ['hook', 'rank', 'rank', 'rank', 'cta'])
-        self.assertEqual([s['type'] for s in ed['scenes']][:3], ['quote', 'chapter', 'chapter'])
+        self.assertEqual([s['type'] for s in pop['scenes']], ['coldopen', 'rank', 'rank', 'rank', 'cta'])   # cold open replaces the hook
+        self.assertEqual([s['type'] for s in ed['scenes']][:4], ['coldopen', 'quote', 'chapter', 'chapter'])
 
     def test_restructure_existing_storyboard(self):
         from reelsmith import storyboard as sbm
@@ -575,6 +575,69 @@ class TestHandleAndLongPages(unittest.TestCase):
             self.assertTrue(all(x >= -1e-6 for x in v))                          # only ever scrolls down
             self.assertLessEqual(max(v), 210)                                    # reading speed through the README
         self.assertGreater(Timeline(self._sb('showcase', 60)).scenes[2].dur, Timeline(self._sb('showcase', 30)).scenes[2].dur)
+
+
+class TestRetention(unittest.TestCase):
+    SRC = None
+
+    def setUp(self):
+        self.src = TestStructures.SRC
+
+    def test_hook_ranking_penalises_filler_and_length(self):
+        from reelsmith import hooks, llm
+        cands = {'hooks': [{'text': 'Hey guys, check out this tool', 'clarity': 10, 'curiosity': 10, 'specificity': 10, 'fit': 10},
+                           {'text': 'Still writing slides by hand?', 'accent': 'by hand', 'pattern': 'problem', 'clarity': 9, 'curiosity': 8, 'specificity': 7, 'fit': 9},
+                           {'text': 'One two three four five six seven eight nine ten eleven', 'clarity': 10, 'curiosity': 10, 'specificity': 10, 'fit': 10}]}
+        saved = llm.complete_json
+        llm.complete_json = lambda *a, **k: json.loads(json.dumps(cands))
+        try:
+            ranked = hooks.write_hooks({'name': 'x', 'scenes': []}, {}, None)
+        finally:
+            llm.complete_json = saved
+        self.assertEqual(ranked[0]['text'], 'Still writing slides by hand?')
+        self.assertEqual(ranked[-1]['text'], 'Hey guys, check out this tool')
+
+    def test_every_template_opens_on_the_hook_at_frame_0(self):
+        from reelsmith import storyboard as sbm
+        from reelsmith.engine import templates as T
+        for tid in T.TEMPLATES:
+            sb, _ = sbm.plan({'template': tid, 'duration': 15, 'topic': 'Stop writing slides by hand'}, self.src, use_llm=False, log=lambda m: None)
+            self.assertEqual(sb['scenes'][0]['type'], 'coldopen', tid)
+            self.assertEqual(sb['scenes'][-1]['type'], 'cta', tid)
+            self.assertNotEqual(sb['scenes'][1]['type'], 'hook', tid)            # no hook said twice
+
+    def test_micro_format_and_engagement(self):
+        from reelsmith import storyboard as sbm
+        sb, _ = sbm.plan({'template': 'pop', 'duration': 8, 'topic': 'x y z', 'engage': 'comment', 'keyword': 'link'}, self.src,
+                         use_llm=False, log=lambda m: None)
+        self.assertLessEqual(len(sb['scenes']), 3)
+        self.assertEqual(sb['scenes'][0]['type'], 'coldopen')
+        self.assertEqual(sb['scenes'][-1]['engage'], 'Comment \u201cLINK\u201d for the link')
+        self.assertEqual(sbm.engagement({'engage': 'comment'}, {})[0], 'save')       # no keyword, no promise to reply
+        self.assertIsNone(sbm.engagement({'engage': 'none'}, {}))
+
+    def test_loop_ends_on_the_first_frame(self):
+        import skia, numpy as np
+        from reelsmith import storyboard as sbm
+        from reelsmith.engine.timeline import Timeline
+        sb, _ = sbm.plan({'template': 'midnight', 'duration': 10, 'topic': 'Stop writing slides by hand'}, self.src, use_llm=False, log=lambda m: None)
+        tl = Timeline(sb); surf = skia.Surface(270, 480)
+        def frame(f):
+            c = surf.getCanvas(); c.clear(skia.ColorBLACK); c.save(); c.scale(.25, .25); tl.render_frame(c, f); c.restore()
+            return surf.makeImageSnapshot().toarray(colorType=skia.kRGBA_8888_ColorType).astype(int)
+        self.assertLess(np.abs(frame(0) - frame(int(sb['duration'] * 30) - 1)).mean(), 2.0)
+
+    def test_pipeline_writes_checklist(self):
+        import shutil
+        if not shutil.which('ffmpeg'): self.skipTest('ffmpeg not installed')
+        from reelsmith import pipeline
+        m, sb, caps = pipeline.generate({'topic': 'Stop writing slides by hand', 'duration': 6, 'audience': 'tech creators', 'template': 'minimal'},
+                                        tempfile.mkdtemp(), 'draft', use_llm=False, log=lambda x: None)
+        labels = {c['label']: c['ok'] for c in m['checks']}
+        self.assertTrue(labels['Hook on screen from the first frame'])
+        self.assertTrue(labels['Niche stated'])
+        self.assertTrue(labels['Asks for a save, comment or share'])
+        self.assertTrue(caps.get('pinned_comment'))
 
 if __name__ == '__main__':
     unittest.main()
