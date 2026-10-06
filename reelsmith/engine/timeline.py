@@ -22,6 +22,8 @@ def allocate(scene_dicts, total, beat=BEAT):
 
     # drop from the middle (keep first + last) until minimums fit
     drop_order = ['statement', 'quote', 'terminal', 'stats', 'title', 'bullets', 'steps', 'features', 'chapter', 'rank', 'code', 'teaser']
+    order = list(range(len(scenes)))                     # original positions, to put scenes back in place
+    dropped = []
     while sum(b[0] for b in budgets) > total and len(scenes) > 2:
         idx = None
         for kind in drop_order:
@@ -31,7 +33,12 @@ def allocate(scene_dicts, total, beat=BEAT):
             mids = [i for i in range(1, len(scenes) - 1) if scenes[i]['type'] != 'scroll']
             if not mids: break
             idx = min(mids, key=lambda i: abs(i - len(scenes) // 2))
-        scenes.pop(idx); budgets.pop(idx)
+        dropped.append((order.pop(idx), scenes.pop(idx), budgets.pop(idx)))
+    # dropping overshoots: put back the most important dropped scenes that now fit
+    for pos, sc, bud in reversed(dropped):
+        if sum(b[0] for b in budgets) + bud[0] <= total:
+            k = next((i for i, o in enumerate(order) if o > pos), len(order))
+            order.insert(k, pos); scenes.insert(k, sc); budgets.insert(k, bud)
 
     mins = np.array([b[0] for b in budgets]); ideals = np.array([b[1] for b in budgets])
     if mins.sum() >= total:

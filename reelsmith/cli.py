@@ -21,6 +21,8 @@ def main(argv=None):
     g.add_argument('--audience', default='', help='who it is for, e.g. "indie developers" (sharpens hook, script and hashtags)')
     g.add_argument('--engage', default='auto', choices=['auto', 'save', 'comment', 'share', 'follow', 'none'], help='what the closing card asks viewers to do')
     g.add_argument('--keyword', default='', help='keyword for --engage comment ("Comment LINK for the link"); only if you will reply')
+    g.add_argument('--cover', default='auto', choices=['auto', 'stack', 'headline', 'device', 'split', 'magazine', 'poster', 'breaking', 'terminal', 'sticker', 'minimal'],
+                   help="cover layout (auto = the template's own); two alternatives are always saved too")
     g.add_argument('--no-hook', action='store_true', help='skip the cold-open hook (not recommended)')
     g.add_argument('--no-loop', action='store_true', help='fade out instead of looping back to the first frame')
     g.add_argument('--no-screens', action='store_true', help='skip the page scroll-through screenshot')
@@ -107,7 +109,7 @@ def main(argv=None):
         if a.cmd == 'plan':
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
             inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
-            inputs.update(audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
+            inputs.update(cover_style=getattr(a, 'cover', 'auto'), audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
                           retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             src = fetch_source(a.url) if a.url else None
             sb, how = sbm.plan(inputs, src, use_llm=not a.no_llm)
@@ -119,7 +121,7 @@ def main(argv=None):
                 ap.error('give at least one of --topic, --description, --url')
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
             inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
-            inputs.update(audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
+            inputs.update(cover_style=getattr(a, 'cover', 'auto'), audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
                           retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             pipeline.generate(inputs, a.out, 'draft' if a.draft else 'final', a.workers, use_llm=not a.no_llm, progress=_bar(),
                               upscale=a.upscale, upscale_method=a.upscale_method,

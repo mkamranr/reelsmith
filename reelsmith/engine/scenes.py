@@ -785,7 +785,7 @@ class CTA(Scene):
     kind = 'cta'
 
     @staticmethod
-    def budget(d): return 4.0, 5.5
+    def budget(d): return 2.6, 4.5           # everything on the card is in place by ~2.1 s
 
     def setup(self):
         self.name = S(self.d, 'name') or self.ctx.brand
@@ -1017,7 +1017,8 @@ class Scroll(Scene):
     kind = 'scroll'
     SAMP = skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear)
 
-    SLOW, FAST, DWELL = 170.0, 650.0, 0.45      # display px/s through the README, above it; pause where it starts
+    SLOW, FAST, DWELL = 170.0, 2600.0, 0.3      # display px/s through the README; a quick glide past what's above it
+    START = 0.45                                 # scrolling begins while the frame is still tilting in
 
     @staticmethod
     def _plan(d, vw=760, vh=1300):
@@ -1033,9 +1034,9 @@ class Scroll(Scene):
     def budget(d):
         """Long READMEs get long scenes (the planner fits the rest of the video around it)."""
         fast, slow = Scroll._plan(d)
-        need = 2.4 + fast / Scroll.FAST + (Scroll.DWELL if fast else 0) + slow / Scroll.SLOW
+        need = Scroll.START + 0.9 + min(1.0, fast / Scroll.FAST) + (Scroll.DWELL if fast else 0) + slow / Scroll.SLOW
         ideal = clamp(need, 6.0, 32.0)
-        return clamp(ideal * 0.4, 5.0, 11.0), ideal
+        return clamp(ideal * 0.25, 4.0, 6.0), ideal      # long READMEs want time, but never crowd out the story
 
     def setup(self):
         import os
@@ -1054,8 +1055,8 @@ class Scroll(Scene):
         d = dict(self.d)
         if self.img: d.update(img_w=self.img.width(), img_h=self.img.height())
         self.fast, slow_total = Scroll._plan(d, self.vw, self.vh)
-        span = max(0.5, self.dur - 1.0 - 0.9)                      # scrolling window inside the scene
-        self.ta = min(self.fast / self.FAST, span * 0.35) if self.fast else 0.0
+        span = max(0.5, self.dur - self.START - 0.6)               # scrolling window inside the scene
+        self.ta = min(1.0, max(0.5, self.fast / self.FAST), span * 0.3) if self.fast else 0.0
         self.tdw = self.DWELL if self.fast else 0.0
         self.tb = max(0.3, span - self.ta - self.tdw)
         self.slow = min(slow_total, self.SLOW * self.tb)            # never faster than reading speed
@@ -1064,7 +1065,7 @@ class Scroll(Scene):
     def sounds(self):
         self.at(0.0, 'whoosh', 0.55, dur=0.6, up=True)
         self.at(0.75, 'tick', 0.4)
-        if self.fast: self.at(1.0 + self.ta, 'tick', 0.5)
+        if self.fast: self.at(self.START + self.ta, 'tick', 0.5)
 
     @staticmethod
     def _ramp(u, r=0.15):
@@ -1075,7 +1076,7 @@ class Scroll(Scene):
         return v * (u - r / 2)
 
     def offset(self, t):
-        t0 = 1.0
+        t0 = self.START
         if t <= t0: return 0.0
         if self.ta and t < t0 + self.ta:
             u = (t - t0) / self.ta; return self.fast * (u * u * (3 - 2 * u))    # brisk, settling onto the README
@@ -1085,7 +1086,7 @@ class Scroll(Scene):
 
     def frame_matrix(self, t):
         """Frame-local rect → screen quad with a perspective tilt that settles to flat."""
-        e = e_out5(prog(t, 0.0, 1.0))
+        e = e_out5(prog(t, 0.0, 0.75))
         tilt = (1 - e) * 24
         x0 = 540 - self.fw / 2; y0 = self.top + (1 - e) * 220
         pts = [(-self.fw / 2, -self.fh / 2, 0), (self.fw / 2, -self.fh / 2, 0), (self.fw / 2, self.fh / 2, 0), (-self.fw / 2, self.fh / 2, 0)]
@@ -1132,7 +1133,7 @@ class Scroll(Scene):
                 if self.travel > 0:                                   # scrollbar
                     total = self.img.height() * self.k
                     bh = max(60, self.vh * self.vh / total); by = self.vy + (self.vh - bh) * (self.offset(t) / max(1, total - self.vh))
-                    rrect(c, self.vx + self.vw - 14, by, 7, bh, 3.5, (128, 128, 128), 0.55 * prog(t, 1.0, 1.4))
+                    rrect(c, self.vx + self.vw - 14, by, 7, bh, 3.5, (128, 128, 128), 0.55 * prog(t, 0.4, 0.8))
             c.restore()
             if TH.device == 'phone':
                 rrect(c, self.fw / 2 - 70, self.inset + 16, 140, 34, 17, (0, 0, 0))     # camera island

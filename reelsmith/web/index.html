@@ -133,6 +133,9 @@
   .dlg-actions .spacer { flex: 1; }
   .link-btn { border: 0; background: none; color: var(--bad); cursor: pointer; padding: 11px 4px; font-weight: 600; }
   .presets { margin-top: 8px; }
+  .covers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .covers a { color: var(--ink); text-decoration: none; font-size: 13px; display: grid; gap: 4px; }
+  .covers img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
   .presets button { font-size: 13px; }
   ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
   ul.checks li b { display: inline-block; width: 20px; }
@@ -319,6 +322,9 @@
     </div>
     <p class="hint" style="margin:6px 0 0">New account or stuck at ~150 views? Post 7-15 s videos: finished views are what get a Reel shown to more people.</p>
 
+    <label for="cover-style">Cover <small>two alternatives are always made too</small></label>
+    <select id="cover-style"><option value="auto">Match the template</option></select>
+
     <label for="engage">Ask viewers to <small>shown on the closing card and in the caption</small></label>
     <div class="row"><select id="engage">
         <option value="auto">Save it (recommended)</option><option value="comment">Comment a keyword</option>
@@ -464,7 +470,7 @@ document.querySelectorAll('#view-tabs button').forEach(b => b.addEventListener('
 function brief() {
   return { template, topic: $('topic').value.trim(), description: $('description').value.trim(), url: $('url').value.trim(),
            duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, audience: $('audience').value.trim(),
-           engage: $('engage').value === 'auto' ? 'save' : $('engage').value, keyword: $('keyword').value.trim(), quality, ...upOpts(), ...voOpts() };
+           engage: $('engage').value === 'auto' ? 'save' : $('engage').value, cover_style: $('cover-style').value, keyword: $('keyword').value.trim(), quality, ...upOpts(), ...voOpts() };
 }
 function voOpts() {
   return $('vo').checked ? { voiceover: true, voice: $('vo-voice').value.trim() || undefined, burn_captions: $('burn').checked } : {};
@@ -688,6 +694,13 @@ function showResult(r) {
     flash(b, await copyText(cards[b.dataset.i][1], b.closest('.cap').querySelector('pre')));
   }));
   // before you post: retention checklist + the hook and its alternatives
+  if (m.covers && m.covers.length) {
+    const el = document.createElement('article'); el.className = 'cap';
+    el.innerHTML = `<header><h3>Covers</h3></header><div class="covers">${m.covers.map(cv =>
+      `<a href="${r.base}${cv.file}?dl=1" title="Download"><img src="${r.base}${cv.file}?t=${Date.now()}" alt="${esc(cv.name)} cover"><span>${esc(cv.name)}</span></a>`).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Pick the one that stands out in your profile grid; click to download.</p>`;
+    $('caps').prepend(el);
+  }
   if (m.checks) {
     const el = document.createElement('article'); el.className = 'cap';
     el.innerHTML = `<header><h3>Before you post</h3></header><ul class="checks">${m.checks.map(k =>
@@ -939,6 +952,9 @@ function pickTemplate(id) {
   $('accent-hex').placeholder = t.accent_free ? 'Let the planner choose' : `Template default, ${t.accent.toUpperCase()}`;
   if (!$('accent-hex').value.trim()) { $('accent').value = t.accent.toLowerCase(); setAccent(t.accent); }
 }
+api('/api/covers').then(list => {
+  $('cover-style').innerHTML = '<option value="auto">Match the template</option>' + list.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}).catch(() => {});
 api('/api/templates').then(list => {
   templates = list;
   $('tpl-grid').innerHTML = list.map(t => `<button type="button" class="tpl" role="radio" aria-checked="false" data-t="${t.id}">

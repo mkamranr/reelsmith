@@ -92,7 +92,14 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
                 shutil.copy2(os.path.join(old_assets, x['image']), os.path.join(job, x['image']))
     sb['asset_dir'] = job
     page_url = inputs.get('url') or (sb.get('url') if storyboard is not None else None)
+    page_status = ('shown', 'kept from the storyboard') if any(x['type'] == 'scroll' for x in sb['scenes']) else \
+        ('off', 'turned off') if not inputs.get('screens', True) else ('off', 'no link given') if not page_url else None
     if page_url and inputs.get('screens', True) and not any(x['type'] == 'scroll' for x in sb['scenes']):
+        if source is None:                                   # re-render: we still want the README fallback
+            try:
+                source = fetch_source(page_url)
+            except Exception as e:
+                log(f'  note: could not read {page_url} for the README fallback ({e}).')
         stage('capture', 0)
         log('Capturing the page …')
         info = None
@@ -102,10 +109,15 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
                               dark=not tplmod.get(sb['template'])['light'], log=log)
         except Exception as e:
             log(f'  note: no page scroll-through ({e}).')
+            page_status = ('off', f'capture failed: {e}')
+        if not info and page_status is None:
+            page_status = ('off', 'no browser for a screenshot and no README text to draw')
         if info:
             host = (source or {}).get('kind')
             cap_text = {'github': 'See it on GitHub', 'huggingface': 'On Hugging Face'}.get(host, 'Take a look')
             sb['scenes'] = bpm.add_scroll(sb['scenes'], sb['template'], 'page.png', info['kind'], sb.get('url', ''), cap_text, info)
+            page_status = ('shown', ('screenshot' if info['kind'] == 'screenshot' else 'README drawn as a page (no headless browser found)')
+                           + f", {info['width']}×{info['height']}")
             ix = next(i for i, x in enumerate(sb['scenes']) if x['type'] == 'scroll')
             log(f"  {'screenshot' if info['kind'] == 'screenshot' else 'README page'} {info['width']}×{info['height']}, "
                 f"shown after the {sb['scenes'][ix - 1]['type'] if ix else 'start'}")
@@ -148,7 +160,14 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
 
     stage('cover', 0)
     log('Rendering cover …')
-    render_cover(sb, os.path.join(job, 'cover.png'), scale=scale_for(upscale) if upscale else 1.0)
+    from .engine.cover import alternatives as cover_alts, STYLE_NAMES, default_style
+    want = (inputs.get('cover_style') or 'auto').lower()
+    main = render_cover(sb, os.path.join(job, 'cover.png'), scale=scale_for(upscale) if upscale else 1.0, style=None if want == 'auto' else want)
+    covers = [{'style': main, 'name': STYLE_NAMES.get(main, main), 'file': 'cover.png'}]
+    for st in cover_alts(sb, main):
+        fn = f'cover-{st}.png'
+        render_cover(sb, os.path.join(job, fn), scale=scale_for(upscale) if upscale else 1.0, style=st)
+        covers.append({'style': st, 'name': STYLE_NAMES.get(st, st), 'file': fn})
 
     stage('captions', 0)
     log('Writing captions …')
@@ -169,6 +188,9 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
         {'label': 'Niche stated', 'ok': bool(sb.get('audience')), 'detail': sb.get('audience') or 'set "Who is it for" so hook, captions and hashtags target one audience'},
         {'label': '3-5 specific hashtags', 'ok': 3 <= tags <= 5, 'detail': f'{tags} in the Instagram caption'},
         {'label': 'Loops back to the start', 'ok': bool(sb.get('loop')), 'detail': ''},
+        {'label': 'Page scroll-through', 'ok': bool(page_status and page_status[0] == 'shown' and any(p['type'] == 'scroll' for p in plan)),
+         'detail': (page_status or ('off', ''))[1] if any(p['type'] == 'scroll' for p in plan) or not page_status or page_status[0] != 'shown'
+                   else 'dropped: the video is too short to fit it'},
     ]
     manifest = {'job': os.path.basename(job), 'dir': job, 'name': sb['name'], 'duration': sb['duration'], 'quality': quality,
                 'resolution': (TARGETS[upscale]['size'] if upscale else ((540, 960) if quality == 'draft' else (1080, 1920))),
@@ -176,7 +198,7 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
                 'template': sb.get('template'),
                 'voiceover': bool(voiceover), 'voice': (voice or (s_tts or {}).get('voice')) if voiceover else None,
                 'planned_by': how, 'captions_by': c.get('source'), 'seconds': round(time.time() - t0, 1),
-                'files': files, 'checks': checks, 'hook': sb.get('hook_line'), 'hook_alternatives': sb.get('hook_alternatives') or []}
+                'files': files, 'covers': covers, 'checks': checks, 'hook': sb.get('hook_line'), 'hook_alternatives': sb.get('hook_alternatives') or []}
     with open(os.path.join(job, 'manifest.json'), 'w') as f: json.dump(manifest, f, indent=2)
     stage('done', 1)
     log(f"Done in {manifest['seconds']}s → {job}")

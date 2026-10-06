@@ -30,6 +30,7 @@ for Instagram, Facebook and YouTube.
 - [Features](#features)
 - [Getting views](#getting-views)
 - [Templates](#templates)
+- [Covers](#covers)
 - [Page scroll-through](#page-scroll-through)
 - [Quick start](#quick-start)
 - [Connect a language model](#connect-a-language-model)
@@ -156,10 +157,13 @@ Give a link and every template shows the page itself: a headless browser takes a
 for dark templates; on GitHub it starts at the repository, skipping GitHub's own navigation, and runs to the end of the
 README), and a scroll-through scene moves down it inside a phone, browser window or card that tilts into place.
 
-Long READMEs are read, not skimmed: the scroll moves briskly past the file list, pauses where the README begins, then
+The scroll starts moving while the frame is still tilting in, glides past GitHub's header and file list in about a
+second, then reads. Long READMEs are read, not skimmed: the scroll moves briskly past the file list, pauses where the README begins, then
 scrolls at reading speed (never faster than about 200 px a second). The scene grows with the README, up to 45% of the
 video, and is never dropped to fit a short video; in a short video it shows the start of a long README rather than
-racing through it, so give a long README a longer video (60–90 s) to see more of it. Each template
+racing through it, so give a long README a longer video to see more of it: about 5 s of README reading at 15 s,
+8 s at 30 s, 20+ s at 60 s. If a job's page didn't appear, its **Before you post** checklist says why (turned off,
+no link, capture failed, or the video too short to fit it). Each template
 puts it where it fits its story: after the title in the demo and the screen tour, before the countdown in Pop, after the
 report in Broadcast.
 
@@ -173,6 +177,26 @@ pip install -e ".[screenshots]" && playwright install chromium
 or point `REELSMITH_CHROMIUM` at an existing Chrome/Chromium. Without a browser, the README is drawn as a GitHub-style
 page instead, marked "README" rather than passed off as a screenshot. The browser refuses requests to private and
 local addresses, like the link reader. Turn the scene off with **Show the page** in the brief or `--no-screens`.
+
+## Covers
+
+Every job makes three covers: one in the template's own layout and two contrasting alternatives, so you can pick the
+one that stands out in your profile grid. The headline is the video's hook, so the cover and the first frame match.
+
+| Layout | Looks like | Default for |
+|---|---|---|
+| Card stack | the hook over a 3D stack of slides from the video | Midnight |
+| Big headline | the hook filling the frame, key words on a marker highlight | Aurora |
+| Phone mockup | the hook above your page, tilted in a phone | Showcase |
+| Split | the hook on a solid accent block, the page in a browser below | |
+| Magazine | a masthead, the hook as the cover story, cover lines, the page as the cover image | Editorial |
+| Film poster | tagline, a big title, credits | Cinema |
+| Breaking news | a NEW banner, the hook on white news straps, the page, a ticker | Broadcast |
+| Terminal | the hook printed by `cat hook.txt` in a terminal | Terminal |
+| Stickers | the hook with a marker highlight and a tilted badge (the countdown size for listicles) | Pop |
+| Minimal | one line, a lot of space | Minimal |
+
+Pick one under **Cover** in the brief, or `--cover <layout>`; the alternatives appear in the job's **Covers** card.
 
 ## Quick start
 

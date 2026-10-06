@@ -26,7 +26,7 @@ MIME = {'.mp4': 'video/mp4', '.png': 'image/png', '.json': 'application/json', '
 def make_runner(out_root):
     def run(job, hooks):
         p = job['payload']
-        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword')}
+        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword', 'cover_style')}
         inputs['retention_hook'] = p.get('retention_hook', True) is not False
         inputs['loop'] = p.get('loop', True) is not False
         inputs['restructure'] = bool(p.get('restructure'))
@@ -96,6 +96,9 @@ def make_handler(jobs, port):
             if path == '/api/tts':
                 return self._send(200, {'config': ttsmod.public(ttsmod.load()), 'presets': ttsmod.PRESETS,
                                         'ready': bool(ttsmod.settings())})
+            if path == '/api/covers':
+                from .engine.cover import STYLES, STYLE_NAMES
+                return self._send(200, [{'id': k, 'name': STYLE_NAMES[k]} for k in STYLES])
             if path == '/api/templates':
                 from .engine import templates as tpl
                 return self._send(200, tpl.listing())

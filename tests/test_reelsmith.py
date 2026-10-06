@@ -638,6 +638,58 @@ class TestRetention(unittest.TestCase):
         self.assertTrue(labels['Niche stated'])
         self.assertTrue(labels['Asks for a save, comment or share'])
         self.assertTrue(caps.get('pinned_comment'))
+        self.assertEqual(len(m['covers']), 3)                                  # main cover + two alternatives
+        self.assertEqual(len({c['style'] for c in m['covers']}), 3)
+        for cv in m['covers']: self.assertTrue(os.path.exists(os.path.join(m['dir'], cv['file'])))
+
+
+class TestCoversAndPagePacing(unittest.TestCase):
+    def test_every_cover_style_renders(self):
+        from reelsmith import storyboard as sbm
+        from reelsmith.engine.cover import render_cover, STYLES, default_style
+        from reelsmith.engine import templates as T
+        from PIL import Image
+        d = tempfile.mkdtemp()
+        sb, _ = sbm.plan({'template': 'midnight', 'duration': 15, 'topic': 'Stop writing slides by hand', 'handle': 'me'},
+                         TestStructures.SRC, use_llm=False, log=lambda m: None)
+        for st in STYLES:
+            self.assertEqual(render_cover(sb, os.path.join(d, st + '.png'), style=st), st)
+            self.assertEqual(Image.open(os.path.join(d, st + '.png')).size, (1080, 1920))
+        for tid in T.TEMPLATES:                                              # each template's own layout
+            sbt = {**sb, 'template': tid}
+            self.assertEqual(render_cover(sbt, os.path.join(d, tid + '.png')), default_style(sbt))
+        self.assertGreaterEqual(len({default_style({'template': t}) for t in T.TEMPLATES}), 8)   # covers differ by template
+
+    def test_short_video_keeps_its_story_around_a_long_page(self):
+        from reelsmith.engine.timeline import Timeline
+        from reelsmith.blueprints import add_scroll
+        from reelsmith.storyboard import sanitize
+        base = {'name': 'x', 'scenes': [{'type': 'coldopen', 'text': 'Your README as a Reel'}, {'type': 'title', 'name': 'x'},
+                {'type': 'statement', 'text': 'One.'}, {'type': 'bullets', 'items': [{'title': 'A'}, {'title': 'B'}]}, {'type': 'cta'}]}
+        sb = sanitize({**base, 'duration': 15}, {'template': 'midnight', 'duration': 15})
+        sb['scenes'] = add_scroll(sb['scenes'], 'midnight', 'p.png', 'screenshot', 'x', 'See it', {'width': 860, 'height': 14000, 'focus_y': 3290})
+        kinds = [s.kind for s in Timeline(sb).scenes]
+        self.assertIn('scroll', kinds)
+        self.assertTrue(set(kinds) - {'coldopen', 'scroll', 'cta'}, kinds)     # some of the story survives next to the page
+        sc = next(s for s in Timeline(sb).scenes if s.kind == 'scroll')
+        self.assertGreater(sc.offset(sc.START + 0.3), 0)                       # moving within half a second
+        self.assertGreater(sc.dur - sc.START - sc.ta - sc.tdw - 0.6, 3.5)      # most of the scene is README reading
+
+    def test_rerender_without_browser_still_shows_the_page(self):
+        import shutil
+        if not shutil.which('ffmpeg'): self.skipTest('ffmpeg not installed')
+        from reelsmith import pipeline, capture, sources
+        saved = (capture._browser_ok, sources.fetch_source, pipeline.fetch_source)
+        fake = lambda url: {'kind': 'github', 'title': 'x', 'url': 'github.com/o/x', 'facts': {}, 'text': '# X\n\nA tool.\n\n- one\n- two\n'}
+        capture._browser_ok = False; pipeline.fetch_source = fake
+        try:
+            sb0 = {'name': 'x', 'url': 'github.com/o/x', 'template': 'minimal', 'duration': 8,
+                   'scenes': [{'type': 'coldopen', 'text': 'A tool for x'}, {'type': 'cta'}]}
+            m, sb, _ = pipeline.generate({'duration': 8}, tempfile.mkdtemp(), 'draft', storyboard=sb0, use_llm=False, log=lambda x: None)
+        finally:
+            capture._browser_ok, sources.fetch_source, pipeline.fetch_source = saved
+        chk = next(c for c in m['checks'] if c['label'] == 'Page scroll-through')
+        self.assertTrue(chk['ok'], chk); self.assertIn('README', chk['detail'])
 
 if __name__ == '__main__':
     unittest.main()
