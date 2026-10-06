@@ -88,6 +88,11 @@ def github(owner, repo):
         'homepage': meta.get('homepage') or None, 'description': meta.get('description')}.items() if v not in (None, '', [])}
     out = {'kind': 'github', 'title': meta.get('name') or repo, 'url': f'github.com/{owner}/{repo}',
            'facts': facts, 'text': _clean_md(readme)}
+    try:                                    # README media, found before the text is cleaned of images
+        from .spotlight_assets import media_from_markdown
+        out['media'] = media_from_markdown(readme, f'github.com/{owner}/{repo}')
+    except Exception:
+        out['media'] = []
     if note: out['note'] = note
     return out
 

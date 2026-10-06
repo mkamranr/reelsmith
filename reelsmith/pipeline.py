@@ -95,7 +95,10 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     page_url = inputs.get('url') or (sb.get('url') if storyboard is not None else None)
     page_status = ('shown', 'kept from the storyboard') if any(x['type'] == 'scroll' for x in sb['scenes']) else \
         ('off', 'turned off') if not inputs.get('screens', True) else ('off', 'no link given') if not page_url else None
-    if page_url and inputs.get('screens', True) and not any(x['type'] == 'scroll' for x in sb['scenes']):
+    voice_led = bool(tplmod.get(sb['template']).get('voice_led'))
+    if voice_led:
+        page_status = _prepare_spotlight(sb, inputs, source, job, page_url, log, stage)
+    if not voice_led and page_url and inputs.get('screens', True) and not any(x['type'] == 'scroll' for x in sb['scenes']):
         if source is None:                                   # re-render: we still want the README fallback
             try:
                 source = fetch_source(page_url)
@@ -127,7 +130,20 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
 
     res = TARGETS[upscale]['label'] if native else ('540 × 960' if quality == 'draft' else '1080 × 1920')
     voice_track = None
-    if voiceover:
+    if voice_led:                                         # the voice decides the timing; captions always follow it
+        stage('narration', 0)
+        voice_track, segs, total = narr.build_voice_led(sb, s_tts if voiceover else None, voice=voice, log=log, check=check)
+        sb['duration'] = round(total, 3)
+        sb['spoken'] = [{'start': x['start'], 'end': x['end'], 'text': x['text']} for x in segs] if sb['burn_captions'] else None
+        if not sb['spoken']: sb.pop('spoken')
+        log(f"  {len(segs)} spoken lines, {total:.1f}s" + ('' if voiceover else ' (timing estimated; turn on a voice-over for the real thing)'))
+        if voiceover:
+            with open(os.path.join(job, 'narration.json'), 'w') as f:
+                json.dump({'voice': voice or s_tts.get('voice'), 'segments': segs}, f, indent=2, ensure_ascii=False)
+            with open(os.path.join(job, 'narration.srt'), 'w') as f: f.write(narr.srt(segs))
+            from scipy.io import wavfile
+            wavfile.write(os.path.join(job, 'voiceover.wav'), narr.SR, (np.clip(voice_track, -1, 1) * 32767).astype(np.int16))
+    elif voiceover:
         stage('narration', 0)
         plan0 = Timeline(sb).plan_summary()
         voice_track, segs = narr.build(sb, plan0, sb['duration'], s_tts, voice=voice, source=source, use_llm=use_llm,
@@ -180,7 +196,8 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     cta = next((x for x in sb['scenes'] if x['type'] == 'cta'), {})
     tags = len(re.findall(r'(?:^|\s)#\w+', c.get('instagram', '')))
     checks = [
-        {'label': 'Hook on screen from the first frame', 'ok': first.get('type') == 'coldopen', 'detail': first.get('text', '')},
+        {'label': 'Hook on screen from the first frame', 'ok': first.get('type') == 'coldopen' or (voice_led and bool(sb.get('spoken'))),
+         'detail': first.get('text') or (sb.get('spoken') or [{}])[0].get('text', '')},
         {'label': 'Short enough to be finished', 'ok': sb['duration'] <= 15 if sb['duration'] <= 30 else False,
          'detail': f"{sb['duration']:.0f}s" + ('' if sb['duration'] <= 15 else ': 7-15 s gets the highest completion while an account is new')},
         {'label': 'Readable with the sound off', 'ok': (not voiceover) or bool(sb.get('spoken')),
@@ -189,6 +206,7 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
         {'label': 'Niche stated', 'ok': bool(sb.get('audience')), 'detail': sb.get('audience') or 'set "Who is it for" so hook, captions and hashtags target one audience'},
         {'label': '3-5 specific hashtags', 'ok': 3 <= tags <= 5, 'detail': f'{tags} in the Instagram caption'},
         {'label': 'Loops back to the start', 'ok': bool(sb.get('loop')), 'detail': ''},
+        {'label': 'Repo page and demos', 'ok': bool(sb.get('page', {}).get('image')), 'detail': page_status[1] if page_status else ''} if voice_led else
         {'label': 'Page scroll-through', 'ok': bool(page_status and page_status[0] == 'shown' and any(p['type'] == 'scroll' for p in plan)),
          'detail': (page_status or ('off', ''))[1] if any(p['type'] == 'scroll' for p in plan) or not page_status or page_status[0] != 'shown'
                    else 'dropped: the video is too short to fit it'},
@@ -204,3 +222,50 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     stage('done', 1)
     log(f"Done in {manifest['seconds']}s → {job}")
     return manifest, sb, c
+
+
+
+def _prepare_spotlight(sb, inputs, source, job, url, log, stage):
+    """Desktop capture (or the README drawn as a page), README media, avatar. Returns a status for the checklist."""
+    from .capture import browser_available, readme_page, CaptureError
+    from . import spotlight_assets as sa
+    stage('capture', 0)
+    log('Capturing the page and its demos …')
+    full = (url if url and url.startswith('http') else ('https://' + url if url else ''))
+    if url and source is None:
+        try: source = fetch_source(url)
+        except Exception as e: log(f'  note: could not read {url} ({e}).')
+    media_items = list((source or {}).get('media') or [])
+    page, status = None, None
+    if full and browser_available():
+        try:
+            info = sa.capture_desktop(full, os.path.join(job, 'page.png'))
+            page = {'image': 'page.png', 'anchors': info['anchors'], 'title': info['title'], 'dark': False, 'kind': 'screenshot'}
+            seen = {m['url'] for m in info['media']}
+            media_items = info['media'] + [m for m in media_items if m['url'] not in seen]
+            status = f"screenshot {info['width']}×{info['height']}"
+        except CaptureError as e:
+            log(f'  note: screenshot failed ({e}); drawing the README instead.')
+    if page is None and source and source.get('text'):
+        ri = readme_page(source['text'], source.get('title') or sb['name'], source.get('url') or url or '', source.get('facts') or {},
+                         os.path.join(job, 'page.png'))
+        page = {'image': 'page.png', 'anchors': ri.get('anchors', []), 'title': f"{source.get('title') or sb['name']} · README", 'dark': False, 'kind': 'readme'}
+        status = 'README drawn as a page (no headless browser found)'
+    sb['page'] = page or {}
+    assets = sa.download_media(sa.rank_media(media_items), job, limit=4, log=log) if media_items else []
+    sb['media'] = assets
+    if assets: log(f"  demos: {', '.join(a['name'] for a in assets)}")
+    for s in sb['scenes']:                                # segments asking for media we couldn't get show the page
+        if s['type'] == 'browse' and s.get('view') == 'media' and not (isinstance(s.get('media'), int) and 0 <= s['media'] < len(assets)):
+            s['view'] = 'page'; s['show'] = s.get('show') if s.get('show') not in (None, '', 'media') else 'features'
+    if inputs.get('avatar'):
+        try:
+            from PIL import Image
+            raw = os.path.join(job, 'avatar.raw'); sa._fetch(inputs['avatar'], raw)
+            with Image.open(raw) as im:
+                im = im.convert('RGB'); im.thumbnail((400, 400)); im.save(os.path.join(job, 'avatar.jpg'), quality=92)
+            os.remove(raw); sb['avatar'] = 'avatar.jpg'
+        except Exception as e:
+            log(f'  note: avatar not used ({str(e)[:80]}).')
+    if not page: return ('off', 'no link, or nothing to show from it')
+    return ('shown', status + (f", {len(assets)} demo{'s' if len(assets) != 1 else ''} from the README" if assets else ''))

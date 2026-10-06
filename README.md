@@ -50,8 +50,9 @@ for Instagram, Facebook and YouTube.
 
 - **From a link or a sentence.** Reads GitHub repos (README plus stars, forks, language, licence), Hugging Face
   models and datasets, or any web page. A topic or description on its own works too.
-- **Nine templates, nine kinds of video.** Each has its own story structure (product demo, feature story, README
-  walkthrough, countdown listicle, keynote, launch trailer, mini documentary, screen tour, news segment) as well as its
+- **Ten templates, ten kinds of video.** Each has its own story structure (product demo, feature story, README
+  walkthrough, countdown listicle, keynote, launch trailer, mini documentary, screen tour, news segment, and a
+  screen-recorded repo spotlight with word-by-word captions) as well as its
   own look, motion, music and writing tone.
 - **A scroll through the real page.** With a link, a headless browser screenshots the page in phone layout and the
   video scrolls through it slowly inside a device frame that tilts into place.
@@ -128,6 +129,7 @@ planner must follow, the composition, the pacing, the look and the sound:
 | **Aurora** | launch trailer | letterboxed teaser lines → title reveal → features → numbers → vision line → CTA | deep violet, moving gradient light, frosted glass | dissolves, lush pad with shimmer |
 | **Cinema** | mini documentary | teaser → title → stakes quote → parts 01, 02… → numbers → closing line → CTA | warm film grade, letterbox with timecode, light leaks, serif | slow dissolves, 76 BPM pad and bells |
 | **Showcase** | screen tour | hook → title → the page scrolling in a phone → features → numbers → get started → CTA | studio stage with key light and floor, glossy sweeps | zoom cuts with motion blur, 116 BPM plucks |
+| **Spotlight** | repo spotlight | the hook spoken over the page → what it solves → the demo → highlights → more demos → get started → "the tool to check out" → follow card | the repo in a desktop browser window over a blurred fill, its own demo GIFs and videos in tabs, big word-by-word captions with the spoken word on a yellow pill, your handle bottom-left | hard cuts, voice only, no music |
 | **Broadcast** | news segment | headline → report → the page → key facts → numbers → quote → sign-off | navy and red, "NEW" bug, running ticker, left-aligned straps | whip wipes, 124 BPM news bed |
 
 How the structure is applied:
@@ -177,6 +179,28 @@ pip install -e ".[screenshots]" && playwright install chromium
 or point `REELSMITH_CHROMIUM` at an existing Chrome/Chromium. Without a browser, the README is drawn as a GitHub-style
 page instead, marked "README" rather than passed off as a screenshot. The browser refuses requests to private and
 local addresses, like the link reader. Turn the scene off with **Show the page** in the brief or `--no-screens`.
+
+## Spotlight: the repo-explainer format
+
+Spotlight reproduces a popular short-form format: a screen recording of the repository with a voice-over and big
+word-by-word captions. It works differently from the other templates:
+
+- **The voice sets the pace.** Each segment lasts exactly as long as its spoken line, so the length follows the script
+  (about 2.6 words a second) rather than the length slider. It needs a voice-over to sound right; without one the
+  timing is estimated and the captions still run.
+- **Real footage.** The page is captured in desktop layout and the camera moves between the README's logo, description,
+  feature list and code. The README's own demos (videos first, then GIFs, then large images; logos, icons and badges
+  are skipped) are downloaded and play in their own browser tab. Without a headless browser the README is drawn as a
+  page instead.
+- **The hook is spoken, not shown on a card.** The best of the generated hooks becomes the first line, captioned from
+  the very first frame.
+- **Your brand.** Set **Your handle** for the pill in the corner and the follow card, and optionally an **avatar image
+  URL** (`--avatar`); otherwise your initials are used. The follow card says "tools for <your niche>" when **Who is it
+  for** is set.
+
+```bash
+reelsmith generate --url https://github.com/owner/repo --template spotlight --voiceover --handle yourname --audience "indie devs"
+```
 
 ## Covers
 

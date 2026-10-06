@@ -28,6 +28,7 @@ BASE = dict(
     sfx={}, tone='', prefer=[],
     align='c', margin=90, pace=1.0, format='', blueprint='demo',
     entrances=['rise'], sweep=False, hud='progress', device='browser', caption_style='pill', tr=0.42,
+    coldopen=True, voice_led=False,
 )
 
 
@@ -173,6 +174,21 @@ TEMPLATES = {
         sfx={'impact': 1.1, 'whoosh': 1.1, 'swish': 1.2},
         tone='Newsroom: who, what, why it matters. Crisp, factual sentences, no hype words.',
         prefer=['title', 'statement', 'bullets', 'stats', 'quote']),
+    'spotlight': _t(
+        entrances=['rise'], hud='none', device='browser', caption_style='tiktok', tr=0.08,
+        format='Repo spotlight', blueprint='spotlight', coldopen=False, voice_led=True,
+        name='Spotlight', description='A screen-recorded repo explainer: the page and its demos in a browser, a voice-over, '
+                                      'big word-by-word captions and a follow card. Best with a voice-over.',
+        accent='#FFD21F', acc2='#5AA9FF',
+        bg=(11, 13, 18), surf=(30, 34, 42), text=(255, 255, 255), muted=(170, 178, 192), border=(44, 50, 62),
+        codebg=(16, 18, 24), panel=(20, 23, 30),
+        fonts=dict(sans=INTER, display=INTER, mono=JBM), track=1.0, radius=1.0, shadow='soft', bg_style='minimal',
+        vignette=0.0, grain=0.0, transition='cut',
+        music=dict(bpm=100, prog='major', pad='sine', pad_gain=0.03, pad_lp=1500, bass=0.0, kick=0.0, hats=0.0, voice_only=True),
+        sfx={'all': 0.0},
+        tone='Like a sharp tech creator talking to camera: what it is, the surprising part, how it works, why it matters. '
+             'Conversational, concrete, no hype.',
+        prefer=['browse'])
 }
 
 DEFAULT = 'midnight'

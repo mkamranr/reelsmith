@@ -6,13 +6,18 @@ import numpy as np
 import skia
 
 from .lib import *
-from .scenes import Ctx, REGISTRY
+from .scenes import Ctx, REGISTRY, initials
 
 TR = 0.42      # transition overlap, seconds
 BEAT = 0.5     # 120 BPM — cuts land on beats so the music bed lines up
 
 
 def allocate(scene_dicts, total, beat=BEAT):
+    fixed = [s for s in scene_dicts if s.get('type') in REGISTRY]
+    if fixed and all(isinstance(s.get('dur'), (int, float)) and s['dur'] > 0 for s in fixed):
+        out, t = [], 0.0                                  # the voice decides: each scene lasts as long as its line
+        for s in fixed: out.append((s, t, float(s['dur']))); t += float(s['dur'])
+        return out
     """Fit scenes into `total` seconds. Drops low-priority middle scenes if even the minimums can't fit,
     then distributes time proportionally to each scene's ideal length and snaps cuts to the beat grid."""
     scenes = [s for s in scene_dicts if s.get('type') in REGISTRY]
@@ -77,9 +82,19 @@ class Timeline:
         self.name = sb.get('name') or sb.get('title') or 'Reelsmith'
         self.ctx = Ctx(self.name)
         self.ctx.asset_dir = sb.get('asset_dir') or ''
+        import os as _os
+        self.ctx.page = dict(sb.get('page') or {}, url=sb.get('url', ''))
+        self.ctx.media = sb.get('media') or []
+        _h = (sb.get('handle') or '').strip()
+        self.ctx.handle_text = ('@' + _h if _h and not _h.startswith('@') and ' ' not in _h and '.' not in _h and '/' not in _h else _h)[:40]
+        if sb.get('avatar'):
+            from .scenes import _load_image
+            _p = sb['avatar'] if _os.path.isabs(sb['avatar']) else _os.path.join(self.ctx.asset_dir, sb['avatar'])
+            self.ctx.avatar_img = _load_image(_p)
         self.loop = bool(sb.get('loop', False))
         self.ctx.handle = bool((sb.get('handle') or '').strip())
         plan = allocate(sb['scenes'], self.duration, self.beat)
+        if plan: self.duration = max(self.duration, plan[-1][1] + plan[-1][2]) if all('dur' in p[0] for p in plan) else self.duration
         self.scenes = []
         for i, (d, t0, dur) in enumerate(plan):
             cls = REGISTRY[d['type']]
@@ -275,9 +290,48 @@ class Timeline:
                 text(c, f'{int(t // 3600):02d}:{int(t // 60) % 60:02d}:{int(t) % 60:02d}:{fr:02d}', 1010, H - 62, M(500, 22), TH.muted, af * 0.8, 'r', track=2)
                 text(c, (self.handle or self.name.upper())[:30], 70, H - 62, M(700, 24 if self.handle else 22), TH.text if self.handle else TH.muted, af * (0.95 if self.handle else 0.8), track=2 if self.handle else 4)
 
+    def _caption_tiktok(self, c, t, words):
+        """Short-form explainer captions: heavy white caps with a black outline, the spoken word on a yellow pill,
+        upcoming words faint. Centred over the footage, up to two lines."""
+        f = I(900, 80); sp = tw(' ', f) + 30          # room for the highlight pill's padding on both sides
+        items = [(w.upper(), ws, we) for w, ws, we in words]
+        lines, cur, cw = [], [], 0
+        for it in items:
+            w_ = tw(it[0], f)
+            if cur and cw + sp + w_ > 900: lines.append(cur); cur, cw = [], 0
+            cur.append((it, w_)); cw += w_ + (sp if len(cur) > 1 else 0)
+        if cur: lines.append(cur)
+        y0 = 1190 - (len(lines) - 1) * 50
+        for li, ln in enumerate(lines):
+            total = sum(w_ for _, w_ in ln) + sp * (len(ln) - 1)
+            x = 540 - total / 2; y = y0 + li * 100
+            for (w, ws, we), w_ in ln:
+                on = ws - 0.06 <= t < we - 0.06; future = t < ws - 0.06      # one word at a time; first lit at frame 0
+                if on:
+                    rrect(c, x - 14, y - 70, w_ + 28, 92, 18, TH.acc)
+                    text(c, w, x, y, f, (12, 12, 12))
+                else:
+                    c.drawString(w, x, y, f, paint((0, 0, 0), 0.35 if future else 1, stroke=13, cap_round=True))
+                    text(c, w, x, y, f, (255, 255, 255), 0.35 if future else 1)
+                x += w_ + sp
+
     def draw_handle(self, c, t):
         """Your handle, visible near the bottom for the whole video, in the template's style."""
         if not self.handle or TH.hud == 'cinema': return          # Cinema shows it in the letterbox (hud)
+        if TH.caption_style == 'tiktok':                            # bottom-left pill with the channel avatar
+            if any(s.kind == 'follow' and s.t0 <= t for s in self.scenes): return
+            a = prog(t, 0.0, 0.3)
+            f = I(700, 30); w = tw(self.handle, f) + 104
+            rrect(c, 52, 1736, w, 66, 33, (0, 0, 0), 0.45 * a)
+            av = self.ctx.avatar_img
+            if av:
+                c.save(); c.clipRRect(skia.RRect.MakeOval(skia.Rect.MakeXYWH(62, 1745, 48, 48)), skia.ClipOp.kIntersect, True)
+                c.drawImageRect(av, skia.Rect.MakeXYWH(62, 1745, 48, 48), skia.SamplingOptions(skia.FilterMode.kLinear)); c.restore()
+            else:
+                circle(c, 86, 1769, 24, TH.acc2, a)
+                text(c, initials(self.handle.lstrip('@')), 86, 1778, I(800, 20), (255, 255, 255), a, 'c')
+            text(c, self.handle, 124, 1780, f, (255, 255, 255), a)
+            return
         a = prog(t, 0.6, 1.2) * (1 - prog(t, self.duration - 0.7, self.duration))
         if a <= 0: return
         h = self.handle
@@ -327,6 +381,7 @@ class Timeline:
         if not g: return
         start, end, words = g
         style = TH.caption_style
+        if style == 'tiktok': return self._caption_tiktok(c, t, words)
         size = {'bold': 70, 'strap': 46, 'film': 44, 'mono': 44, 'serif': 52, 'clean': 50}.get(style, 54)
         weight = 900 if style == 'bold' else 600 if style in ('clean', 'film') else 800
         f = M(700, size) if style == 'mono' else I(weight, size)
@@ -411,6 +466,7 @@ class Timeline:
                 elif style == 'pop': a, z = 1 - pe, 1 - 0.12 * pe
                 elif style == 'dissolve': a, z = 1 - e_io3(p), 1 + 0.06 * p
                 elif style == 'glitch': a, glitch = (1.0 if p < 0.5 else 0.0), p * 2
+                elif style == 'cut': a = 1.0 if p < 0.5 else 0.0
                 else: a = 1 - e_io3(p)                              # fade
             if i > 0 and tl < TH.tr:                                # incoming
                 style = TH.transition or self.scenes[i - 1].out
@@ -421,6 +477,7 @@ class Timeline:
                 elif style == 'pop': a, z = a * min(1, p * 3), z * lerp(1.18, 1, e_back(p, 2.2))
                 elif style == 'dissolve': a, z = a * e_io3(p), z * lerp(0.97, 1, po)
                 elif style == 'glitch': a, glitch = (a if p >= 0.5 else 0.0), max(glitch, (1 - p) * 2 if p >= 0.5 else 0)
+                elif style == 'cut': a = a if p >= 0.5 else 0.0
                 else: a = a * e_io3(p)
             if a <= 0.003: continue
             # motion blur along the direction of travel while a transition moves the scene

@@ -502,6 +502,7 @@ class TestPageTourAndCaptions(unittest.TestCase):
         self.assertEqual((info['kind'], info['width']), ('readme', 1080))
         src = TestStructures.SRC
         for tid in T.TEMPLATES:
+            if T.TEMPLATES[tid].get('voice_led'): continue          # Spotlight is the page itself; covered by TestSpotlight
             sc = add_scroll(plan_heuristic({'template': tid, 'duration': 40}, src)['scenes'], tid, 'p.png', 'readme', 'x', 'See it')
             types = [s['type'] for s in sc]
             self.assertEqual(types.count('scroll'), 1, tid)
@@ -601,6 +602,7 @@ class TestRetention(unittest.TestCase):
         from reelsmith import storyboard as sbm
         from reelsmith.engine import templates as T
         for tid in T.TEMPLATES:
+            if not T.TEMPLATES[tid].get('coldopen', True): continue   # Spotlight speaks the hook instead (TestSpotlight)
             sb, _ = sbm.plan({'template': tid, 'duration': 15, 'topic': 'Stop writing slides by hand'}, self.src, use_llm=False, log=lambda m: None)
             self.assertEqual(sb['scenes'][0]['type'], 'coldopen', tid)
             self.assertEqual(sb['scenes'][-1]['type'], 'cta', tid)
@@ -739,6 +741,67 @@ class TestDelete(unittest.TestCase):
         self._wait(st, run, lambda j: j is None)
         self.assertFalse(os.path.exists(run_dir))
         self.assertEqual(sorted(os.listdir(out)), ['_jobs'])                      # nothing left behind
+
+
+class TestSpotlight(unittest.TestCase):
+    SRC = {'kind': 'github', 'url': 'github.com/o/r', 'title': 'tool', 'facts': {},
+           'text': 'Tool turns notes into slides. It runs locally. Everything is measured.\n\n## Features\n\n### Live preview\n\nSee every slide.\n\n'
+                   '### Smart fitting\n\nText shrinks.\n\n### Captions\n\nWritten for you.\n\n```bash\nnpx tool init\n```\n',
+           'media': [{'url': 'https://x/logo.png', 'kind': 'image', 'w': 900, 'h': 200}, {'url': 'https://x/demo.gif', 'kind': 'image'}]}
+
+    def test_structure_and_voice_led_timing(self):
+        from reelsmith import storyboard as sbm
+        from reelsmith.narration import build_voice_led
+        from reelsmith.engine.timeline import Timeline
+        sb, _ = sbm.plan({'template': 'spotlight', 'duration': 30, 'topic': 'Stop writing slides by hand', 'audience': 'indie devs'},
+                         self.SRC, use_llm=False, log=lambda m: None)
+        types = [s['type'] for s in sb['scenes']]
+        self.assertEqual(types[-1], 'follow'); self.assertNotIn('cta', types); self.assertNotIn('coldopen', types)
+        self.assertGreaterEqual(types.count('browse'), 4)
+        self.assertTrue(sb['scenes'][0]['say'].startswith('Stop writing slides by hand'))       # the hook is the first thing said
+        _, segs, total = build_voice_led(sb)
+        self.assertEqual(segs[0]['start'], 0.0)                                                  # lit from frame 0
+        tl = Timeline({**sb, 'duration': total, 'spoken': segs})
+        self.assertAlmostEqual(sum(s.dur for s in tl.scenes), total, places=2)                  # each scene lasts as long as its line
+        for s, d in zip(tl.scenes, sb['scenes']): self.assertAlmostEqual(s.dur, d['dur'], places=3)
+
+    def test_structure_holds_with_a_model_that_ignores_it(self):
+        from reelsmith import storyboard as sbm, llm
+        reply = {'name': 'tool', 'scenes': [{'type': 'hook', 'kicker': 'Still', 'big': 'stuck', 'punch': 'on slides?'},
+                 {'type': 'bullets', 'items': [{'title': 'A one'}, {'title': 'B two'}]}, {'type': 'statement', 'text': 'It just works for you.'}, {'type': 'cta'}]}
+        saved = (llm.complete_json, llm.provider)
+        llm.complete_json = lambda *a, **k: json.loads(json.dumps(reply)); llm.provider = lambda *a, **k: {'kind': 'mock'}
+        try:
+            sb, _ = sbm.plan({'template': 'spotlight', 'duration': 30}, self.SRC, log=lambda m: None)
+        finally:
+            llm.complete_json, llm.provider = saved
+        types = [s['type'] for s in sb['scenes']]
+        self.assertEqual(set(types), {'browse', 'follow'}); self.assertEqual(types[-1], 'follow')
+
+    def test_demo_ranking(self):
+        from reelsmith.spotlight_assets import rank_media, media_from_markdown
+        ranked = rank_media([{'url': 'https://x/logo.png', 'kind': 'image'}, {'url': 'https://x/a.png', 'kind': 'image', 'w': 900, 'h': 600},
+                             {'url': 'https://x/d.gif', 'kind': 'image'}, {'url': 'https://x/v.mp4', 'kind': 'video'}])
+        self.assertEqual([m['url'][-5:] for m in ranked], ['v.mp4', 'd.gif', 'a.png'])
+        md = '![logo](docs/logo.png)\n![demo](docs/demo.gif)\n[![CI](https://img.shields.io/x.svg)](x)'
+        self.assertEqual([m['url'] for m in media_from_markdown(md, 'https://github.com/o/r')],
+                         ['https://raw.githubusercontent.com/o/r/HEAD/docs/logo.png', 'https://raw.githubusercontent.com/o/r/HEAD/docs/demo.gif'])
+
+    def test_full_video_without_browser_or_voice(self):
+        import shutil
+        if not shutil.which('ffmpeg'): self.skipTest('ffmpeg not installed')
+        from reelsmith import pipeline, capture
+        saved = (capture._browser_ok, pipeline.fetch_source)
+        capture._browser_ok = False; pipeline.fetch_source = lambda url: dict(self.SRC, media=[])
+        try:
+            m, sb, _ = pipeline.generate({'url': 'https://github.com/o/r', 'duration': 15, 'template': 'spotlight', 'handle': 'me'},
+                                         tempfile.mkdtemp(), 'draft', use_llm=False, log=lambda x: None)
+        finally:
+            capture._browser_ok, pipeline.fetch_source = saved
+        self.assertTrue(os.path.exists(os.path.join(m['dir'], 'video.mp4')))
+        self.assertTrue(sb.get('spoken'))                                                        # captions even without a voice
+        chk = next(c for c in m['checks'] if c['label'] == 'Repo page and demos')
+        self.assertTrue(chk['ok']); self.assertIn('README', chk['detail'])
 
 if __name__ == '__main__':
     unittest.main()

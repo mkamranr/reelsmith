@@ -27,10 +27,11 @@ ALLOWED = {
     'documentary': {'teaser', 'title', 'quote', 'chapter', 'stats', 'statement', 'cta'},
     'tour': {'hook', 'title', 'features', 'bullets', 'stats', 'steps', 'statement', 'cta'},
     'news': {'title', 'statement', 'bullets', 'stats', 'quote', 'steps', 'cta'},
+    'spotlight': {'browse', 'follow'},
 }
 for _v in ALLOWED.values(): _v.update({'scroll', 'coldopen'})   # every structure can show the page and open cold
 OPENING = {'demo': 'hook', 'story': 'quote', 'walkthrough': 'terminal', 'listicle': 'hook', 'keynote': 'title', 'trailer': 'teaser',
-           'documentary': 'teaser', 'tour': 'hook', 'news': 'title'}
+           'documentary': 'teaser', 'tour': 'hook', 'news': 'title', 'spotlight': 'browse'}
 # where the page scroll-through goes in each structure: after the first scene of one of these types
 SCROLL_AFTER = {'demo': ['title', 'hook'], 'story': ['title', 'quote'], 'walkthrough': ['terminal'], 'listicle': ['hook'],
                 'keynote': ['statement', 'title'], 'trailer': ['title'], 'documentary': ['title'], 'tour': ['title', 'hook'],
@@ -124,6 +125,19 @@ def blueprint_text(template_id, duration, has_numbers=True):
         if has_numbers: s.append('4. stats: only real figures.')
         if not short: s.append('5. quote: a line from the material, attributed.')
         s.append('Last. cta: the sign-off.')
+    elif bp == 'spotlight':
+        words = int(duration * 2.6)
+        s = ['This is a voice-over over a screen recording of the page. Write 5-8 segments of type "browse", each '
+             '{"type": "browse", "view": "page" or "media", "show": "logo|description|features|code|top", "media": <index, only with '
+             'view "media">, "say": "<what the narrator says while this is on screen>"}, then {"type": "follow"}.',
+             f'The "say" lines together are the whole voice-over: about {words} words, at most 28 words per segment, '
+             'written to be spoken, flowing from one segment into the next like one person talking.',
+             '1. browse, show "logo": the hook, what it is in one breath.',
+             '2. browse, show "description": the problem it solves, or what makes it different.',
+             '3. browse, view "media", media 0: the surprising part, said over the demo (use show "features" if there is no media).',
+             '4-5. browse: how it works and what it can do (show "features" or "code", or more media).',
+             '6. browse: who it is for, why it matters.',
+             'Last browse, show "top": "this is the tool to check out" plus the ask. Then follow.']
     else:
         s = ['1. hook with 2-3 pains the audience recognises.', '2. title.',
              '3. code (or terminal if the material has commands but no code).']
@@ -152,10 +166,28 @@ def _hook_text(sc):
     return ' '.join(x for x in (sc.get('kicker'), sc.get('big'), sc.get('punch')) if x).strip()
 
 
+def _join_and(xs):
+    xs = [x for x in xs if x]
+    return ', '.join(xs[:-1]) + (' and ' + xs[-1] if len(xs) > 1 else (xs[0] if xs else ''))
+
+
+def _say_of(sc):
+    for k in ('say', 'text', 'line', 'tagline', 'punch', 'title', 'caption'):
+        if isinstance(sc.get(k), str) and len(sc[k].split()) >= 3: return sc[k]
+    items = _items(sc)
+    return ('Highlights: ' + _join_and([a for a, _ in items[:3]]) + '.') if items else ''
+
+
 def _convert(sc, bp):
     """Scenes a structure doesn't use, re-expressed in its own vocabulary (may return several or none)."""
     k = sc['type']
     if k in ALLOWED[bp]: return [sc]
+    if bp == 'spotlight':
+        say = _say_of(sc)
+        if k == 'cta': return []
+        show = {'hook': 'logo', 'coldopen': 'logo', 'title': 'logo', 'statement': 'description', 'quote': 'description',
+                'code': 'code', 'terminal': 'code', 'stats': 'readme'}.get(k, 'features')
+        return [{'type': 'browse', 'view': 'page', 'show': show, 'say': say}] if say else []
     listy = k in ('bullets', 'features', 'steps')
     if bp == 'story':
         if listy: return [{'type': 'chapter', 'title': a, 'body': b} for a, b in _items(sc)][:5]
@@ -249,6 +281,7 @@ def _conform(scenes, template_id, duration, name, url, material, bp):
     has_numbers = any(s['type'] == 'stats' for s in scenes)
     c = counts(bp, duration, has_numbers)
     cta = next((s for s in scenes if s['type'] == 'cta'), {'type': 'cta', 'name': name, 'url': url})
+    scenes = [s for s in scenes if s['type'] != 'follow']
     body = [x for s in scenes if s['type'] != 'cta' for x in _convert(s, bp)]
     body = [s for s in body if any(v for k, v in s.items() if k != 'type')]
     body = _merge_bullets(body)
@@ -300,6 +333,9 @@ def _conform(scenes, template_id, duration, name, url, material, bp):
                                                                    ['scroll', 'features', 'bullets', 'stats', 'steps', 'statement'], {'statement': 1})
     elif bp == 'news':
         ordered = [opener] + _by_order(rest, ['statement', 'scroll', 'bullets', 'stats', 'steps', 'quote'], {'statement': 1, 'quote': 1})
+    elif bp == 'spotlight':
+        ordered = [opener] + [s for s in rest if s['type'] == 'browse']
+        return ordered + [{'type': 'follow'}]
     elif bp == 'walkthrough':
         ordered = [opener] + _by_order(rest, ['title', 'code', 'bullets', 'steps', 'statement', 'terminal', 'stats'], {'statement': 1, 'title': 1})
     else:
@@ -337,6 +373,8 @@ def _synth_opener(bp, scenes, name, url, m, c):
         return {'type': 'title', 'name': name, 'tagline': lead}
     if bp == 'news':
         return {'type': 'title', 'name': name, 'tagline': lead}
+    if bp == 'spotlight':
+        return {'type': 'browse', 'view': 'page', 'show': 'logo', 'say': (f'{name}: {lead}' if lead else name)}
     if bp in ('trailer', 'documentary'):
         bits = [b.strip() for b in re.split(r'[.,;:—-]\s+', lead) if b.strip()][:c.get('teaser_lines', 3) - 1]
         return {'type': 'teaser', 'lines': (bits or ['Something new is here.']) + ['Meet ' + name + '.']}
@@ -397,7 +435,7 @@ def material(inputs, source):
         or [c for c in shell_lines if len(c) <= 56 and not re.search(devtool, c)]
     def fmt(v): return f"{v / 1000:.1f}k".replace('.0k', 'k') if v >= 1000 else str(v)
     nums = [(k, fmt(v)) for k, v in facts.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0]
-    return {'name': name, 'topic': topic, 'product': product, 'sents': sents, 'lead': lead, 'sections': secs,
+    return {'name': name, 'topic': topic, 'product': product, 'sents': sents, 'lead': lead, 'sections': secs, 'media': src.get('media') or [],
             'code': other, 'cmds': cmds, 'nums': nums, 'facts': facts, 'url': src.get('url', ''),
             'tag': ' · '.join(str(x) for x in (facts.get('license'), facts.get('language')) if x)}
 
@@ -453,6 +491,17 @@ def assemble(m, template_id, duration):
             if secs and duration >= 25 else []
         vision = [{'type': 'statement', 'text': later[-1]}] if later else []
         return [teaser, {'type': 'title', 'name': name, 'tagline': _clause(lead, 70)}] + feats + stats + vision + [cta]
+    if bp == 'spotlight':
+        media = (m.get('media') or [])
+        segs = [{'type': 'browse', 'view': 'page', 'show': 'logo', 'say': _clause(f"Meet {name}. {lead}" if lead else f"Meet {name}.", 160)}]
+        if len(sents) > 1: segs.append({'type': 'browse', 'view': 'page', 'show': 'description', 'say': _clause(sents[1], 160)})
+        if media: segs.append({'type': 'browse', 'view': 'media', 'media': 0, 'say': 'Here it is in action.' + (f' {_clause(sents[2], 120)}' if len(sents) > 2 else '')})
+        if secs: segs.append({'type': 'browse', 'view': 'page', 'show': 'features',
+                              'say': 'Highlights: ' + _join_and([_clause(a, 40).rstrip('.') for a, _ in secs[:3]]) + '.'})
+        if len(media) > 1 and duration >= 25: segs.append({'type': 'browse', 'view': 'media', 'media': 1, 'say': _clause(secs[3][1] if len(secs) > 3 and secs[3][1] else 'And it does all of this for you.', 140)})
+        if m['cmds'] and duration >= 20: segs.append({'type': 'browse', 'view': 'page', 'show': 'code', 'say': 'Getting started takes a single command.'})
+        segs.append({'type': 'browse', 'view': 'page', 'show': 'top', 'say': 'This is the tool to check out. The link is in the description.'})
+        return segs + [{'type': 'follow'}]
     if bp == 'documentary':
         bits = [b.strip(' .') + '.' for b in re.split(r'[.,;:—]\s+', lead) if 3 < len(b.strip()) <= 34][:2]
         teaser = {'type': 'teaser', 'lines': (bits or [_clause(topic or 'It started with a problem', 34)]) + [f'This is {name}.'[:34]]}

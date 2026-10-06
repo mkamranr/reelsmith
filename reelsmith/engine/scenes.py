@@ -24,6 +24,8 @@ class Ctx:
         self.events, self.shakes = [], []
         self.asset_dir = ''
         self.handle = False
+        self.page, self.media, self.cursor = None, [], None
+        self.handle_text, self.avatar_img = '', None
         self.brand = brand_name
 
     def sfx(self, t, kind, gain=1.0, **kw):
@@ -1186,5 +1188,182 @@ class Coldopen(Scene):
                 x += ww + sp + tr
 
 
+# ============================== 17. BROWSE (Spotlight: the repo in a browser window) ==============================
+_BLUR_CACHE = {}
+
+
+def _blurred(key, img, w=160):
+    """A small, heavily blurred copy for the background fill (computed once per image)."""
+    if key in _BLUR_CACHE: return _BLUR_CACHE[key]
+    h = max(2, int(img.height() * w / img.width()))
+    s = skia.Surface(w, h); c = s.getCanvas()
+    c.drawImageRect(img, skia.Rect.MakeWH(w, h), skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear))
+    s2 = skia.Surface(w, h); c2 = s2.getCanvas()
+    c2.drawImage(s.makeImageSnapshot(), 0, 0, skia.SamplingOptions(), skia.Paint(ImageFilter=skia.ImageFilters.Blur(6, 6)))
+    _BLUR_CACHE[key] = s2.makeImageSnapshot()
+    return _BLUR_CACHE[key]
+
+
+class Browse(Scene):
+    """A desktop browser window over a blurred fill. view 'page': the camera moves to a part of the captured page
+    (logo, description, features, code, top) continuing from where the last page scene ended. view 'media': a README
+    image, GIF or video opened in its own tab, playing."""
+    kind = 'browse'
+    out = 'fade'
+    SAMP = skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear)
+    WX, WY, WW, WH, BAR = 84, 150, 912, 1530, 118
+
+    @staticmethod
+    def budget(d):
+        n = len(S(d, 'say').split())
+        dur = clamp(n / 2.6 + 0.3, 1.6, 9.0)
+        return dur * 0.8, dur
+
+    def setup(self):
+        import os
+        self.page = self.ctx.page or {}
+        self.vx, self.vy, self.vw, self.vh = self.WX, self.WY + self.BAR, self.WW, self.WH - self.BAR
+        self.media = None; self.frames = []; self.img = None
+        mi = self.d.get('media')
+        if S(self.d, 'view') == 'media' and isinstance(mi, int) and 0 <= mi < len(self.ctx.media or []):
+            self.media = self.ctx.media[mi]
+            base = self.ctx.asset_dir or ''
+            if self.media['kind'] == 'image':
+                self.img = _load_image(os.path.join(base, self.media['file']))
+            else:
+                d = os.path.join(base, self.media['dir'])
+                self.frames = [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith('.jpg')] if os.path.isdir(d) else []
+                self.img = _load_image(self.frames[0]) if self.frames else None
+        if self.media is None:
+            p = self.page.get('image')
+            self.img = _load_image(p if os.path.isabs(p or '') else os.path.join(self.ctx.asset_dir or '', p or '')) if p else None
+            self.to = self.target(S(self.d, 'show') or 'top')
+            self.frm = self.ctx.cursor or self.to
+            self.ctx.cursor = self.to
+
+    def target(self, show):
+        """Page rect (x, y, w) to frame for a 'show' keyword, from the anchors found when the page was captured."""
+        W0 = (self.img.width() if self.img else 1650); A = self.page.get('anchors') or []
+        def first(kind, k=0):
+            xs = [a for a in A if a['kind'] == kind]
+            return xs[min(k, len(xs) - 1)] if xs else None
+        pick = {'logo': first('image') or first('heading'), 'title': first('heading'), 'description': first('paragraph'),
+                'features': first('list') or first('heading', 1), 'code': first('code'), 'media': first('image', 1) or first('video'),
+                'readme': first('readme')}.get(show)
+        if show in ('top', 'end') or not pick:
+            return (0.0, 0.0, float(W0))
+        w = clamp(max(pick['w'] * 1.25, 760.0), 760.0, float(W0))
+        x = clamp(pick['x'] + pick['w'] / 2 - w / 2, 0, W0 - w)
+        y = max(0.0, pick['y'] - 0.12 * w)
+        return (x, y, w)
+
+    def frame_img(self, t):
+        if not self.frames: return self.img
+        i = int(t * self.media.get('fps', 15)) % len(self.frames)
+        return _load_image(self.frames[i]) if len(_IMG_CACHE) < 400 else skia.Image.MakeFromEncoded(skia.Data.MakeFromFileName(self.frames[i]))
+
+    def draw(self, c, t):
+        img = self.frame_img(t)
+        if self.media is None:                                   # camera move across the page, then a slow drift
+            e = e_io3(prog(t, 0.0, min(1.1, self.dur * 0.45)))
+            x = lerp(self.frm[0], self.to[0], e); y = lerp(self.frm[1], self.to[1], e); w = lerp(self.frm[2], self.to[2], e)
+            drift = 0.035 * prog(t, 0, self.dur)
+            w *= (1 - drift); y += self.to[2] * 0.06 * prog(t, 0, self.dur)
+            src_h = self.vh * w / self.vw
+            src = skia.Rect.MakeXYWH(x, y, w, src_h)
+        else:
+            src = None
+        # background: the same footage, blurred and dimmed, filling the frame
+        if img:
+            bg = _blurred(id(self.img) if self.media is None else (self.media.get('name'), 0), self.img)
+            if src is not None:
+                k = bg.width() / self.img.width()
+                bsrc = skia.Rect.MakeXYWH(src.left() * k, src.top() * k, src.width() * k, src.height() * k)
+            else:
+                bsrc = skia.Rect.MakeWH(bg.width(), bg.height())
+            r = bsrc.width() / bsrc.height(); want = W / H
+            if r > want:
+                nw = bsrc.height() * want; bsrc = skia.Rect.MakeXYWH(bsrc.centerX() - nw / 2, bsrc.top(), nw, bsrc.height())
+            else:
+                nh = bsrc.width() / want; bsrc = skia.Rect.MakeXYWH(bsrc.left(), bsrc.centerY() - nh / 2, bsrc.width(), nh)
+            c.drawImageRect(bg, bsrc, skia.Rect.MakeWH(W, H), self.SAMP)
+            c.drawRect(skia.Rect.MakeWH(W, H), paint((0, 0, 0), 0.32 if self.media is None else 0.55))
+        # the browser window
+        x0, y0, ww, wh, bar = self.WX, self.WY, self.WW, self.WH, self.BAR
+        shadow(c, x0, y0, ww, wh, 14, 0.6, 40, 18)
+        light = self.media is None and not self.page.get('dark')
+        chrome = (236, 238, 242) if light else (32, 35, 42)
+        rr = skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(x0, y0, ww, wh), 14, 14)
+        c.save(); c.clipRRect(rr, skia.ClipOp.kIntersect, True)
+        c.drawRect(skia.Rect.MakeXYWH(x0, y0, ww, bar), paint(chrome))
+        tab_w = 430
+        rrect(c, x0 + 14, y0 + 10, tab_w, 46, 10, (255, 255, 255) if light else (48, 52, 62))
+        title = (self.media or {}).get('name') or self.page.get('title') or ''
+        tf = I(500, 20)
+        text(c, wrap(title, tf, tab_w - 60, max_lines=1)[0] if title else '', x0 + 52, y0 + 40, tf, (60, 64, 72) if light else (210, 214, 222))
+        circle(c, x0 + 34, y0 + 33, 8, (36, 41, 47) if light else (200, 204, 212))
+        rrect(c, x0 + 14, y0 + 66, ww - 210, 40, 20, (255, 255, 255) if light else (22, 24, 30))
+        url = S(self.d, 'url') or self.page.get('url') or ''
+        if self.media: url = url.rstrip('/') + '/' + self.media['name']
+        text(c, url[:70], x0 + 40, y0 + 93, I(500, 20), (90, 96, 106) if light else (170, 176, 188))
+        h = getattr(self.ctx, 'handle_text', '')
+        if h:
+            hf = I(700, 20); hw = tw(h, hf) + 46
+            rrect(c, x0 + ww - hw - 16, y0 + 68, hw, 36, 18, (255, 255, 255) if light else (48, 52, 62))
+            circle(c, x0 + ww - hw + 2, y0 + 86, 9, TH.acc2)
+            text(c, h, x0 + ww - hw + 18, y0 + 93, hf, (36, 41, 47) if light else (230, 232, 238))
+        # the page or the media
+        page_bg = (255, 255, 255) if light else (13, 17, 23)
+        c.drawRect(skia.Rect.MakeXYWH(self.vx, self.vy, self.vw, self.vh), paint(page_bg))
+        if img:
+            if src is not None:
+                c.drawImageRect(img, src, skia.Rect.MakeXYWH(self.vx, self.vy, self.vw, self.vh), self.SAMP)
+            else:
+                z = 1.0 + 0.06 * prog(t, 0, self.dur)
+                mw = self.vw * 0.94 * z; mh = mw * img.height() / img.width()
+                if mh > self.vh * 0.9 * z: mh = self.vh * 0.9 * z; mw = mh * img.width() / img.height()
+                c.drawImageRect(img, skia.Rect.MakeXYWH(self.vx + (self.vw - mw) / 2, self.vy + (self.vh - mh) / 2, mw, mh), self.SAMP)
+        c.restore()
+        c.drawRRect(rr, paint((0, 0, 0), 0.25, stroke=2))
+
+
+# ============================== 18. FOLLOW (end card) ==============================
+class Follow(Scene):
+    kind = 'follow'
+
+    @staticmethod
+    def budget(d): return 2.4, 3.2
+
+    def sounds(self):
+        self.at(0.05, 'pop', 0.4, f=520)
+
+    def draw(self, c, t):
+        import os
+        c.drawRect(skia.Rect.MakeWH(W, H), paint(TH.bg))
+        g = skia.GradientShader.MakeRadial(skia.Point(540, 760), 520, [col(TH.acc2, 0.22), col(TH.acc2, 0)])
+        c.drawRect(skia.Rect.MakeWH(W, H), skia.Paint(Shader=g))
+        pa = e_back(prog(t, 0.0, 0.45), 1.6)
+        av = getattr(self.ctx, 'avatar_img', None)
+        with xf(c, 0, 0, max(0.001, pa), 0, 540, 760):
+            ring = skia.GradientShader.MakeSweep(540, 760, [col(TH.acc2), col(TH.acc), col(TH.acc2)])
+            c.drawCircle(540, 760, 172, skia.Paint(AntiAlias=True, Shader=ring))
+            c.drawCircle(540, 760, 160, paint(TH.bg))
+            if av:
+                c.save(); c.clipRRect(skia.RRect.MakeOval(skia.Rect.MakeXYWH(390, 610, 300, 300)), skia.ClipOp.kIntersect, True)
+                s = max(300 / av.width(), 300 / av.height())
+                c.drawImageRect(av, skia.Rect.MakeXYWH(540 - av.width() * s / 2, 760 - av.height() * s / 2, av.width() * s, av.height() * s), skia.SamplingOptions(skia.FilterMode.kLinear))
+                c.restore()
+            else:
+                lab = initials(getattr(self.ctx, 'handle_text', '').lstrip('@') or self.ctx.brand)
+                c.drawCircle(540, 760, 150, paint(TH.surf))
+                f = I(900, 120); text(c, lab, 540, 802, f, TH.text, 1, 'c')
+        l1 = S(self.d, 'line') or 'Follow for more'
+        l2 = S(self.d, 'sub') or 'open-source projects'
+        rise_text(c, l1, 540, 1040, I(800, 58), prog(t, 0.25, 0.7), TH.text, align='c')
+        rise_text(c, l2, 540, 1112, I(800, 58), prog(t, 0.35, 0.8), TH.text, align='c')
+        h = getattr(self.ctx, 'handle_text', '')
+        if h: rise_text(c, h, 540, 1190, I(700, 40), prog(t, 0.5, 0.95), TH.acc2, align='c')
+
+
 REGISTRY = {cls.kind: cls for cls in (Hook, Title, Code, Statement, Bullets, Features, Stats, Steps, Terminal, CTA,
-                                      Quote, Chapter, Rank, Teaser, Scroll, Coldopen)}
+                                      Quote, Chapter, Rank, Teaser, Scroll, Coldopen, Browse, Follow)}

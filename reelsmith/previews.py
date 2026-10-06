@@ -22,7 +22,7 @@ SAMPLE = {
 }
 SIGNATURE = {'demo': ('bullets', 0.9), 'story': ('chapter', 0.9), 'walkthrough': ('terminal', 0.92),
              'listicle': ('rank', 0.8), 'keynote': ('statement', 0.85), 'trailer': ('teaser', 0.97),
-             'documentary': ('chapter', 0.9), 'tour': ('scroll', 0.62), 'news': ('bullets', 0.9)}
+             'documentary': ('chapter', 0.9), 'tour': ('scroll', 0.62), 'news': ('bullets', 0.9), 'spotlight': ('browse', 0.55)}
 SAMPLE_MD = '''# Lumen
 
 Feedback you can act on. Lumen collects reactions from your users and turns them into themes your team can ship.
@@ -52,6 +52,16 @@ def sample_for(tid, asset_dir=None):
     from .blueprints import add_scroll
     inputs = {'template': tid, 'duration': SAMPLE['duration']}
     sb = restructure(sanitize(dict(SAMPLE), inputs), inputs)
+    if asset_dir and tpl.get(tid)['blueprint'] == 'spotlight':  # a page in the browser, voice-led timing, captions
+        from .capture import readme_page
+        from .narration import build_voice_led
+        page = os.path.join(asset_dir, 'sample-desktop.png')
+        info = readme_page(SAMPLE_MD, 'Lumen', 'github.com/lumen/lumen', {'stars': 2400, 'language': 'TypeScript', 'license': 'MIT'}, page)
+        sb['page'] = {'image': os.path.basename(page), 'anchors': info.get('anchors', []), 'title': 'GitHub - lumen/lumen', 'dark': False}
+        sb['asset_dir'] = asset_dir; sb['url'] = 'github.com/lumen/lumen'; sb['handle'] = 'yourhandle'
+        _, segs, total = build_voice_led(sb)
+        sb['duration'] = total; sb['spoken'] = [{'start': x['start'], 'end': x['end'], 'text': x['text']} for x in segs]
+        return sb
     if asset_dir and tpl.get(tid)['blueprint'] == 'tour':      # the screen tour needs a page to scroll
         page = os.path.join(asset_dir, f'sample-page-{"light" if tpl.get(tid)["light"] else "dark"}.png')
         if not os.path.exists(page):

@@ -108,6 +108,12 @@ def apply(sb, hooks):
     best = hooks[0]
     sb['hook_line'] = best
     sb['hook_alternatives'] = hooks[1:4]
+    from .engine import templates as _tpl
+    if not _tpl.get(sb.get('template'))['coldopen']:             # voice-led templates: the hook is the first thing said
+        first = next((s for s in sb['scenes'] if s['type'] == 'browse'), None)
+        if first: first['say'] = best['text'].rstrip('.?!') + ('?' if best['text'].endswith('?') else '.') + \
+            ('' if len(first['say'].split()) > 22 else ' ' + first['say'])
+        return sb
     scenes = [s for s in sb['scenes'] if s['type'] != 'coldopen']
     if scenes and scenes[0]['type'] == 'hook':      # the cold open does the hook's job; don't say it twice
         scenes = scenes[1:]

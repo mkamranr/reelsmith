@@ -98,7 +98,7 @@ STYLES = ['stack', 'headline', 'device', 'split', 'magazine', 'poster', 'breakin
 STYLE_NAMES = {'stack': 'Card stack', 'headline': 'Big headline', 'device': 'Phone mockup', 'split': 'Split', 'magazine': 'Magazine',
                'poster': 'Film poster', 'breaking': 'Breaking news', 'terminal': 'Terminal', 'sticker': 'Stickers', 'minimal': 'Minimal'}
 TEMPLATE_COVER = {'midnight': 'stack', 'editorial': 'magazine', 'terminal': 'terminal', 'pop': 'sticker', 'minimal': 'minimal',
-                  'aurora': 'headline', 'cinema': 'poster', 'showcase': 'device', 'broadcast': 'breaking'}
+                  'aurora': 'headline', 'spotlight': 'headline', 'cinema': 'poster', 'showcase': 'device', 'broadcast': 'breaking'}
 
 
 def default_style(sb):
@@ -127,6 +127,9 @@ def _hook(sb):
 def _page(sb):
     import os
     sc = next((x for x in sb['scenes'] if x['type'] == 'scroll' and x.get('image')), None)
+    if not sc and (sb.get('page') or {}).get('image'):                       # Spotlight's desktop capture
+        an = next((a for a in sb['page'].get('anchors') or [] if a['kind'] == 'readme'), None)
+        sc = {'image': sb['page']['image'], 'focus_y': int(an['y']) if an else 0}
     if not sc: return None, 0
     p = sc['image'] if os.path.isabs(sc['image']) else os.path.join(sb.get('asset_dir') or '', sc['image'])
     try:

@@ -18,6 +18,7 @@ def main(argv=None):
     g.add_argument('--draft', action='store_true', help='540x960 fast preview instead of 1080x1920')
     g.add_argument('--upscale', choices=['2k', '4k'], help='also produce a 1440x2560 (2k) or 2160x3840 (4k) file')
     g.add_argument('--voiceover', action='store_true', help='narrate the video (needs a voice set up: Settings → Voice)')
+    g.add_argument('--avatar', default='', help='image URL for your avatar (Spotlight end card and handle pill)')
     g.add_argument('--audience', default='', help='who it is for, e.g. "indie developers" (sharpens hook, script and hashtags)')
     g.add_argument('--engage', default='auto', choices=['auto', 'save', 'comment', 'share', 'follow', 'none'], help='what the closing card asks viewers to do')
     g.add_argument('--keyword', default='', help='keyword for --engage comment ("Comment LINK for the link"); only if you will reply')
@@ -109,7 +110,7 @@ def main(argv=None):
         if a.cmd == 'plan':
             inputs = {k: getattr(a, k) for k in ('topic', 'description', 'url', 'accent', 'handle', 'duration', 'template')}
             inputs['screens'] = not getattr(a, 'no_screens', False); inputs['burn_captions'] = not getattr(a, 'no_captions', False)
-            inputs.update(cover_style=getattr(a, 'cover', 'auto'), audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
+            inputs.update(avatar=getattr(a, 'avatar', ''), cover_style=getattr(a, 'cover', 'auto'), audience=getattr(a, 'audience', ''), engage=getattr(a, 'engage', 'auto'), keyword=getattr(a, 'keyword', ''),
                           retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             src = fetch_source(a.url) if a.url else None
             sb, how = sbm.plan(inputs, src, use_llm=not a.no_llm)

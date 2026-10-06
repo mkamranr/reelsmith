@@ -347,6 +347,7 @@
       <div>
         <label for="handle">Your handle</label>
         <input id="handle" type="text" placeholder="@yourhandle">
+        <input id="avatar" type="url" placeholder="Avatar image URL (optional)" style="margin-top:6px" aria-label="Avatar image URL, shown on the Spotlight end card">
       </div>
     </div>
 
@@ -476,7 +477,7 @@ document.querySelectorAll('#view-tabs button').forEach(b => b.addEventListener('
 
 function brief() {
   return { template, topic: $('topic').value.trim(), description: $('description').value.trim(), url: $('url').value.trim(),
-           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, audience: $('audience').value.trim(),
+           duration: +$('duration').value, accent: $('accent-hex').value.trim(), handle: $('handle').value.trim(), screens: $('screens').checked, audience: $('audience').value.trim(), avatar: $('avatar').value.trim(),
            engage: $('engage').value === 'auto' ? 'save' : $('engage').value, cover_style: $('cover-style').value, keyword: $('keyword').value.trim(), quality, ...upOpts(), ...voOpts() };
 }
 function voOpts() {

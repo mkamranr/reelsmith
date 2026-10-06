@@ -321,3 +321,33 @@ def srt(segs, max_chars=42):
             d = (sg['end'] - sg['start']) * len(c) / total
             cues.append((t, t + d, c)); t += d
     return '\n'.join(f'{i}\n{_ts(a)} --> {_ts(b)}\n{c}\n' for i, (a, b, c) in enumerate(cues, 1))
+
+
+
+def build_voice_led(sb, s_tts=None, voice=None, log=print, check=lambda: None, wps=2.6):
+    """Spotlight-style timing: each segment lasts exactly as long as its spoken line (estimated from the words when
+    there is no voice). Sets scene['dur']; returns (voice_track or None, caption segments, total seconds)."""
+    speed = float((s_tts or {}).get('speed') or 1.0)
+    segs, clips, t = [], [], 0.0
+    for i, sc in enumerate(sb['scenes']):
+        if sc['type'] != 'browse':
+            sc['dur'] = float(sc.get('dur') or (3.0 if sc['type'] == 'follow' else 3.0)); t += sc['dur']; continue
+        line = clean(sc.get('say', ''))
+        check()
+        if s_tts:
+            log(f"  voice {len(segs) + 1}: \u201c{line}\u201d")
+            clip = _trim_silence(tts.speak(line, s_tts, voice)); d = len(clip) / SR
+            clips.append((t + 0.05, _level(clip)))
+        else:
+            d = max(1.1, len(line.split()) / (wps * speed))
+        sc['dur'] = round(max(1.4, d + 0.16), 3)
+        st = 0.0 if not segs else t + 0.05                  # the very first word is lit from frame 0
+        segs.append({'scene': i, 'type': 'browse', 'start': round(st, 3), 'end': round(st + d, 3), 'text': line})
+        t += sc['dur']
+    track = None
+    if clips:
+        track = np.zeros(int(SR * t) + SR)
+        for st, cl in clips:
+            a = int(st * SR); b = min(len(track), a + len(cl)); track[a:b] += cl[:b - a]
+        track = track[:int(SR * t)]
+    return track, segs, t

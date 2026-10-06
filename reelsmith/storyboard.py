@@ -21,6 +21,8 @@ SCHEMA = {
     'cta': {'name': ('s', 32), 'url': ('s', 48), 'tagline': ('s', 60), 'line': ('s', 44), 'accent': ('s', 20),
             'engage': ('s', 40), 'engage_kind': ('s', 10)},
     'coldopen': {'text': ('s', 70), 'accent': ('s', 30), 'sub': ('s', 40)},
+    'browse': {'view': ('s', 8), 'show': ('s', 14), 'media': ('i',), 'say': ('s', 240), 'dur': ('f',)},
+    'follow': {'line': ('s', 30), 'sub': ('s', 40), 'dur': ('f',)},
     'quote': {'text': ('s', 140), 'by': ('s', 40), 'accent': ('s', 24)},
     'chapter': {'number': ('s', 6), 'title': ('s', 44), 'body': ('s', 150), 'accent': ('s', 24)},
     'rank': {'rank': ('s', 4), 'title': ('s', 40), 'sub': ('s', 90), 'accent': ('s', 24), 'of': ('i',)},
@@ -122,6 +124,9 @@ def _sanitize_scene(sc):
         t = spec[0]
         if t == 's': out[k] = _s(v, spec[1])
         elif t == 'b': out[k] = bool(v)
+        elif t == 'f':
+            try: out[k] = float(v)
+            except (TypeError, ValueError): pass
         elif t == 'i':
             try: out[k] = int(v)
             except (TypeError, ValueError): pass
@@ -158,6 +163,7 @@ def _sanitize_scene(sc):
     if kind == 'teaser' and not out.get('lines'): return None
     if kind == 'scroll' and not out.get('image'): return None
     if kind == 'coldopen' and not out.get('text'): return None
+    if kind == 'browse' and not out.get('say'): return None
     return out
 
 
@@ -178,7 +184,7 @@ def sanitize(sb, inputs=None, source=None):
     # no back-to-back duplicates
     dedup = []
     for s in scenes:
-        if dedup and dedup[-1]['type'] == s['type'] and s['type'] not in ('statement', 'rank', 'chapter', 'quote'): continue
+        if dedup and dedup[-1]['type'] == s['type'] and s['type'] not in ('statement', 'rank', 'chapter', 'quote', 'browse'): continue
         dedup.append(s)
     scenes = dedup
     from .blueprints import OPENING
@@ -187,9 +193,9 @@ def sanitize(sb, inputs=None, source=None):
     if not scenes or (opener == 'hook' and scenes[0]['type'] != 'coldopen' and (not lead or lead[0]['type'] != 'hook')):
         scenes.insert(0, {'type': 'hook', 'kicker': 'Meet', 'big': _s(name, 16), 'punch': _s(inputs.get('topic') or '', 34)})
     url = (source or {}).get('url') or ''
-    if scenes[-1]['type'] != 'cta':
+    if scenes[-1]['type'] not in ('cta', 'follow'):
         scenes = [s for s in scenes if s['type'] != 'cta'] + [{'type': 'cta'}]
-    cta = scenes[-1]
+    cta = scenes[-1] if scenes[-1]['type'] == 'cta' else {}
     cta.setdefault('name', name)
     if url and not cta.get('url'): cta['url'] = _s(url, 48)
     for s in scenes:
@@ -210,7 +216,7 @@ def sanitize(sb, inputs=None, source=None):
                   'badge': _s(cover.get('badge'), 14)},
     }
     if url: out['url'] = url
-    for k in ('asset_dir', 'spoken', 'burn_captions', 'hook_line', 'hook_alternatives', 'loop'):
+    for k in ('asset_dir', 'spoken', 'burn_captions', 'hook_line', 'hook_alternatives', 'loop', 'page', 'media', 'avatar'):
         if k in sb: out[k] = sb[k]
     return out
 
@@ -322,12 +328,18 @@ def retention_pass(sb, inputs, source=None, use_llm=True, log=print):
         if not hl: hl = [hk.heuristic_hook(sb, inputs)]
         sb = hk.apply(sb, hl)
         log(f"  hook: \u201c{hl[0]['text']}\u201d" + (f" (best of {len(hl)}, score {hl[0]['score']})" if len(hl) > 1 else ''))
-    if sb['duration'] <= 10:                  # micro format: hook, one payoff, the ask
+    if sb['duration'] <= 10 and tpl.get(sb['template'])['coldopen']:   # micro format: hook, one payoff, the ask
         sb['scenes'] = conform(sb['scenes'], sb['template'], sb['duration'], sb['name'], sb.get('url', ''), micro=True)
     eg = engagement(inputs, sb)
     for s in sb['scenes']:
         if s['type'] == 'cta':
             if eg: s['engage_kind'], s['engage'] = eg
+    if not tpl.get(sb['template'])['coldopen'] and eg:           # voice-led: the ask is spoken in the last segment
+        last = [s for s in sb['scenes'] if s['type'] == 'browse']
+        if last and eg[1].lower() not in last[-1]['say'].lower(): last[-1]['say'] = (last[-1]['say'].rstrip('.') + '. ' + eg[1] + '.')[:240]
+    for s in sb['scenes']:
+        if s['type'] == 'follow' and sb.get('audience'):
+            s.setdefault('sub', f"tools for {sb['audience'][:30]}")
             if sb['duration'] <= 10: s.pop('tagline', None)
     sb['loop'] = bool(inputs.get('loop', True))
     keep = {k: v for k, v in sb.items() if k != 'scenes'}

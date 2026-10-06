@@ -188,26 +188,32 @@ def readme_page(md, title, url, facts, out_png, dark=False, width=1080, max_heig
         if item is not None: item += ' ' + st
         else: para.append(st)
     flush()
+    anchors = []
     for bl in blocks:
         if y > max_height: break
         k = bl[0]
+        y_start = y
         if k == 'h':
             lvl, size = bl[1], {1: 54, 2: 44, 3: 36}.get(bl[1], 32); f = F(700, size)
             y += 26
             for ln in wrap(bl[2], f, inner): ops.append(('text', pad, y + size, ln, f, fg)); y += size * 1.3
             if lvl <= 2: ops.append(('rule', y + 6)); y += 22
             y += 10
+            anchors.append({'kind': 'heading', 'x': pad, 'y': y_start, 'w': inner, 'h': y - y_start})
         elif k == 'p':
             f = F(400, 32)
             for ln in wrap(bl[1], f, inner): ops.append(('text', pad, y + 32, ln, f, fg)); y += 46
             y += 22
+            anchors.append({'kind': 'paragraph', 'x': pad, 'y': y_start, 'w': inner, 'h': y - y_start})
         elif k == 'li':
             f = F(400, 32); ops.append(('dot', pad + 10, y + 22))
+            if not anchors or anchors[-1]['kind'] != 'list': anchors.append({'kind': 'list', 'x': pad, 'y': y_start, 'w': inner, 'h': 300})
             for ln in wrap(bl[1], f, inner - 40): ops.append(('text', pad + 40, y + 32, ln, f, fg)); y += 46
             y += 10
         elif k == 'code':
             f = F(500, 26, True); h = 36 * len(bl[1]) + 40
             ops.append(('code', y, h, bl[1], f)); y += h + 28
+            anchors.append({'kind': 'code', 'x': pad, 'y': y_start, 'w': inner, 'h': h})
         elif k == 'rule':
             ops.append(('rule', y + 10)); y += 40
         elif k == 'table':
@@ -229,7 +235,8 @@ def readme_page(md, title, url, facts, out_png, dark=False, width=1080, max_heig
             c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(pad, y0, inner, h), 14, 14), skia.Paint(AntiAlias=True, Color=C(codebg)))
             for i, ln in enumerate(lines): c.drawString(ln, pad + 24, y0 + 44 + i * 36, f, skia.Paint(AntiAlias=True, Color=C(fg)))
     surf.makeImageSnapshot().save(out_png, skia.kPNG)
-    return {'path': out_png, 'width': width, 'height': height, 'kind': 'readme', 'focus_y': 0}
+    anchors = [a for a in anchors if a['y'] < height - 200]
+    return {'path': out_png, 'width': width, 'height': height, 'kind': 'readme', 'focus_y': 0, 'anchors': anchors}
 
 
 def page_image(url, source, out_png, dark=False, log=print):

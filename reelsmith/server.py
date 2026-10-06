@@ -26,7 +26,7 @@ MIME = {'.mp4': 'video/mp4', '.png': 'image/png', '.json': 'application/json', '
 def make_runner(out_root):
     def run(job, hooks):
         p = job['payload']
-        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword', 'cover_style')}
+        inputs = {k: p.get(k, '') for k in ('topic', 'description', 'url', 'accent', 'handle', 'template', 'audience', 'engage', 'keyword', 'cover_style', 'avatar')}
         inputs['retention_hook'] = p.get('retention_hook', True) is not False
         inputs['loop'] = p.get('loop', True) is not False
         inputs['restructure'] = bool(p.get('restructure'))
