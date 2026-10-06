@@ -43,8 +43,10 @@ def upscale(src, dst, target, duration=None, progress=None, crf=18, preset='medi
                     pass
     except BaseException:
         proc.kill(); proc.wait()
+        proc.stdout.close(); proc.stderr.close()
         raise
     err = proc.stderr.read()
+    proc.stdout.close(); proc.stderr.close()
     if proc.wait() != 0:
         raise RuntimeError(f'ffmpeg upscale failed: {err.strip()[-400:]}')
     if progress: progress(1.0)

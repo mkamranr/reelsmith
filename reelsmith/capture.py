@@ -244,8 +244,8 @@ def page_image(url, source, out_png, dark=False, log=print):
     if url and browser_available():
         try:
             return capture(url if re.match(r'^https?://', url) else 'https://' + url, out_png, dark=dark)
-        except CaptureError as e:
-            log(f'  note: screenshot failed ({e}); drawing the README instead.')
+        except Exception as e:                       # any failure (not just capture errors) falls back to the README
+            log(f'  note: screenshot failed ({str(e).splitlines()[0] if str(e) else type(e).__name__}); drawing the README instead.')
     elif url:
         log('  note: no headless browser found (pip install playwright && playwright install chromium); drawing the README instead.')
     if source and source.get('text'):

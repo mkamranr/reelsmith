@@ -58,7 +58,9 @@ def render_video(sb, out_path, quality='final', workers=None, progress=None, sca
         render_audio(tl.events, tl.duration, groove, tl.scenes[-1].t0, wav, voice=voice, style=TH.music, sfx_gain=TH.sfx, loop=tl.loop,
                      music_gain=0.0 if (voice is not None and TH.music.get('voice_only')) else 0.5)
 
-        ctx = mp.get_context('spawn' if os.name != 'posix' or os.uname().sysname == 'Darwin' else 'fork')
+        # forkserver/spawn, not fork: the web app renders from a background thread, and forking a multi-threaded
+        # process can deadlock the child (Python 3.12 warns about exactly this).
+        ctx = mp.get_context('forkserver' if 'forkserver' in mp.get_all_start_methods() else 'spawn')
         counter = ctx.Value('i', 0)
         bounds = [round(i * nf / workers) for i in range(workers + 1)]
         segs, procs = [], []

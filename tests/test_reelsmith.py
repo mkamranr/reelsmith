@@ -23,6 +23,16 @@ def _example():
     with open(EXAMPLE) as f: return json.load(f)
 
 
+def _rjson(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def _wjson(path, data):
+    with open(path, 'w') as f:
+        json.dump(data, f)
+
+
 class Storyboard(unittest.TestCase):
     def test_sanitize_repairs_bad_llm_output(self):
         raw = {'name': 'X', 'accent': 'notacolour', 'scenes': [
@@ -124,7 +134,7 @@ class Providers(unittest.TestCase):
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
 
     @classmethod
-    def tearDownClass(cls): cls.srv.shutdown()
+    def tearDownClass(cls): cls.srv.shutdown(); cls.srv.server_close()
 
     def test_ollama_native(self):
         s = llm.resolve(config.normalize({'provider': 'ollama', 'base_url': f'http://127.0.0.1:{self.port}', 'model': 'llama3.1:8b', 'num_ctx': 32768}))
@@ -235,9 +245,9 @@ class TestJobStore(unittest.TestCase):
         st.delete(b, files=True); self.assertIsNone(st.get(b)); self.assertFalse(os.path.exists(bdir))
         # restart: a job left "running" on disk becomes interrupted; queued ones resume
         import json
-        j = st.get(c); j.update(status='running'); json.dump(j, open(os.path.join(out, '_jobs', c + '.json'), 'w'))
+        j = st.get(c); j.update(status='running'); _wjson(os.path.join(out, '_jobs', c + '.json'), j)
         q = {**st.get(r), 'id': 'queued0001', 'status': 'queued', 'created': time.time(), 'payload': {'topic': 'Q'}}
-        json.dump(q, open(os.path.join(out, '_jobs', 'queued0001.json'), 'w'))
+        _wjson(os.path.join(out, '_jobs', 'queued0001.json'), q)
         st2 = self._store(out, runner)
         self.assertEqual(st2.get(c)['status'], 'interrupted')
         self.assertEqual(self._wait(st2, 'queued0001')['status'], 'done')
@@ -389,7 +399,7 @@ class TestTemplates(unittest.TestCase):
         import skia
         from reelsmith.engine.timeline import Timeline
         from reelsmith.engine import templates as T
-        sb = json.load(open(os.path.join(os.path.dirname(__file__), '..', 'examples', 'carousel-crafter.json')))
+        sb = _rjson(os.path.join(os.path.dirname(__file__), '..', 'examples', 'carousel-crafter.json'))
         sb['scenes'].insert(4, {'type': 'bullets', 'caption': 'Why', 'checks': True, 'items': [{'title': 'A'}, {'title': 'B'}]})
         sb['scenes'][5:5] = [{'type': 'quote', 'text': 'A post should never silently look wrong.', 'by': 'The README'},
                              {'type': 'chapter', 'number': 'II.', 'title': 'The editor', 'body': 'Markdown on the left, slides on the right.'},
@@ -536,7 +546,7 @@ class TestLogin(unittest.TestCase):
             self.assertEqual(get('/api/status', 'reelsmith:wrong'), 401)
             self.assertEqual(get('/api/status', 'reelsmith:s3cret'), 200)
             self.assertEqual(get('/healthz'), 200)
-            srv.shutdown()
+            srv.shutdown(); srv.server_close()
         finally:
             os.environ.pop('REELSMITH_PASSWORD', None)
 
@@ -656,7 +666,7 @@ class TestCoversAndPagePacing(unittest.TestCase):
                          TestStructures.SRC, use_llm=False, log=lambda m: None)
         for st in STYLES:
             self.assertEqual(render_cover(sb, os.path.join(d, st + '.png'), style=st), st)
-            self.assertEqual(Image.open(os.path.join(d, st + '.png')).size, (1080, 1920))
+            with Image.open(os.path.join(d, st + '.png')) as im: self.assertEqual(im.size, (1080, 1920))
         for tid in T.TEMPLATES:                                              # each template's own layout
             sbt = {**sb, 'template': tid}
             self.assertEqual(render_cover(sbt, os.path.join(d, tid + '.png')), default_style(sbt))

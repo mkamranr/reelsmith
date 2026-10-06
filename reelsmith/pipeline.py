@@ -244,8 +244,8 @@ def _prepare_spotlight(sb, inputs, source, job, url, log, stage):
             seen = {m['url'] for m in info['media']}
             media_items = info['media'] + [m for m in media_items if m['url'] not in seen]
             status = f"screenshot {info['width']}×{info['height']}"
-        except CaptureError as e:
-            log(f'  note: screenshot failed ({e}); drawing the README instead.')
+        except Exception as e:                           # any failure falls back to the README page
+            log(f'  note: screenshot failed ({str(e).splitlines()[0] if str(e) else type(e).__name__}); drawing the README instead.')
     if page is None and source and source.get('text'):
         ri = readme_page(source['text'], source.get('title') or sb['name'], source.get('url') or url or '', source.get('facts') or {},
                          os.path.join(job, 'page.png'))

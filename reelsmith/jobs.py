@@ -14,6 +14,11 @@ import time
 import traceback
 import uuid
 
+
+def _read_json(path):
+    with open(path) as f:
+        return json.load(f)
+
 ACTIVE = ('queued', 'running')
 SUMMARY_KEYS = ('id', 'kind', 'title', 'status', 'stage', 'progress', 'created', 'started', 'finished', 'error', 'bytes', 'delete_requested',
                 'options', 'retry_of', 'cancel_requested')
@@ -47,7 +52,7 @@ class JobStore:
         for name in os.listdir(self.dir):
             if not name.endswith('.json'): continue
             try:
-                j = json.load(open(os.path.join(self.dir, name)))
+                j = _read_json(os.path.join(self.dir, name))
             except (OSError, json.JSONDecodeError):
                 continue
             if j.get('status') == 'running':
@@ -60,7 +65,7 @@ class JobStore:
         for d in os.listdir(self.out):
             m = os.path.join(self.out, d, 'manifest.json')
             if d.startswith('_') or d in known or not os.path.exists(m): continue
-            try: man = json.load(open(m))
+            try: man = _read_json(m)
             except (OSError, json.JSONDecodeError): continue
             jid = 'imp' + uuid.uuid5(uuid.NAMESPACE_URL, d).hex[:7]
             created = os.path.getmtime(m)
@@ -76,7 +81,7 @@ class JobStore:
 
     def _result(self, manifest, job_dir, sb=None, caps=None):
         def load(name):
-            try: return json.load(open(os.path.join(self.out, job_dir, name)))
+            try: return _read_json(os.path.join(self.out, job_dir, name))
             except (OSError, json.JSONDecodeError): return None
         return {'manifest': manifest, 'base': f'/files/{job_dir}/',
                 'storyboard': sb if sb is not None else load('storyboard.json'),

@@ -114,7 +114,7 @@ def main(argv=None):
                           retention_hook=not getattr(a, 'no_hook', False), loop=not getattr(a, 'no_loop', False))
             src = fetch_source(a.url) if a.url else None
             sb, how = sbm.plan(inputs, src, use_llm=not a.no_llm)
-            json.dump(sb, open(a.out, 'w'), indent=2, ensure_ascii=False)
+            with open(a.out, 'w') as fh: json.dump(sb, fh, indent=2, ensure_ascii=False)
             print(f"storyboard ({how}) → {a.out}: {' → '.join(x['type'] for x in sb['scenes'])}")
             return 0
         if a.cmd == 'generate':
@@ -129,7 +129,7 @@ def main(argv=None):
                               voiceover=a.voiceover, voice=a.voice)
             return 0
         if a.cmd == 'render':
-            sb = json.load(open(a.storyboard))
+            with open(a.storyboard) as fh: sb = json.load(fh)
             inputs = {'duration': a.duration or sb.get('duration', 45), 'handle': sb.get('handle', ''), 'template': a.template, 'restructure': a.restructure}
             pipeline.generate(inputs, a.out, 'draft' if a.draft else 'final', a.workers, storyboard=sb, use_llm=not a.no_llm, progress=_bar(),
                               upscale=a.upscale, upscale_method=a.upscale_method,
@@ -162,7 +162,8 @@ def _voice(a):
             r = T.test(s, a.voice)
             if not r['ok']: print(f"error: {r['error']}", file=sys.stderr); return 2
             if a.save_to:
-                import base64; open(a.save_to, 'wb').write(base64.b64decode(r['audio'].split(',', 1)[1]))
+                import base64
+                with open(a.save_to, 'wb') as fh: fh.write(base64.b64decode(r['audio'].split(',', 1)[1]))
             print(f"ok: {r['duration']}s of speech in {r['seconds']}s with voice {a.voice or s['voice']}" + (f" → {a.save_to}" if a.save_to else '')); return 0
     except (ValueError, T.TTSError) as e:
         print(f'error: {e}', file=sys.stderr); return 2
