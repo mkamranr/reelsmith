@@ -133,6 +133,8 @@
   .dlg-actions .spacer { flex: 1; }
   .link-btn { border: 0; background: none; color: var(--bad); cursor: pointer; padding: 11px 4px; font-weight: 600; }
   .presets { margin-top: 8px; }
+  .cap.warn { border-color: var(--bad); }
+  .cap.warn h3 { color: var(--bad); }
   .covers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .covers a { color: var(--ink); text-decoration: none; font-size: 13px; display: grid; gap: 4px; }
   .covers img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
@@ -725,6 +727,12 @@ function showResult(r) {
     flash(b, await copyText(cards[b.dataset.i][1], b.closest('.cap').querySelector('pre')));
   }));
   // before you post: retention checklist + the hook and its alternatives
+  if (m.warnings && m.warnings.length) {
+    const el = document.createElement('article'); el.className = 'cap warn';
+    el.innerHTML = `<header><h3>Heads up</h3></header>${m.warnings.map(w => `<p>${esc(w)}</p>`).join('')}
+      <p class="hint">The job log (Details) has the full message.</p>`;
+    $('caps').prepend(el);
+  }
   if (m.covers && m.covers.length) {
     const el = document.createElement('article'); el.className = 'cap';
     el.innerHTML = `<header><h3>Covers</h3></header><div class="covers">${m.covers.map(cv =>

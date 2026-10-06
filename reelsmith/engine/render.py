@@ -9,6 +9,7 @@ import time
 import skia
 
 from .lib import W, H, FPS, TH
+from .. import __version__
 from .timeline import Timeline
 from .audio import render_audio
 
@@ -85,7 +86,8 @@ def render_video(sb, out_path, quality='final', workers=None, progress=None, sca
         with open(lst, 'w') as fh:
             for p in segs: fh.write(f"file '{p}'\n")
         subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', lst, '-i', wav,
-                        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', out_path], check=True)
+                        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart',
+                        '-metadata', f'comment=Reelsmith {__version__} · {TH.id}', out_path], check=True)
         if progress: progress('encode', 1.0)
         return tl.plan_summary()
     finally:

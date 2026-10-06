@@ -251,3 +251,23 @@ def page_image(url, source, out_png, dark=False, log=print):
     if source and source.get('text'):
         return readme_page(source['text'], source.get('title') or '', source.get('url') or url or '', source.get('facts') or {}, out_png, dark=dark)
     return None
+
+
+def screenshot_support():
+    """('browser', detail) when a headless Chromium can be launched, else ('readme', why). Used at startup."""
+    try:
+        import PIL  # noqa: F401  (the screenshot step reads image sizes with Pillow)
+    except ImportError:
+        return 'readme', 'Pillow is not installed (pip install Pillow)'
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return 'readme', 'Playwright is not installed (pip install "reelsmith[screenshots]" && playwright install chromium)'
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=os.environ.get('REELSMITH_CHROMIUM') or None,
+                                  args=['--no-sandbox', '--disable-dev-shm-usage'] if os.path.exists('/.dockerenv') else [])
+            v = b.version; b.close()
+        return 'browser', f'Chromium {v} ready'
+    except Exception as e:
+        return 'readme', f'Chromium could not start: {str(e).splitlines()[0][:120]}'

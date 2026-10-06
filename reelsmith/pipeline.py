@@ -195,6 +195,11 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
     first = sb['scenes'][0] if sb['scenes'] else {}
     cta = next((x for x in sb['scenes'] if x['type'] == 'cta'), {})
     tags = len(re.findall(r'(?:^|\s)#\w+', c.get('instagram', '')))
+    warnings = []
+    if inputs.get('screens', True) and page_url and not any(p['type'] in ('scroll', 'browse') for p in plan):
+        why = (page_status or ('off', 'unknown reason'))[1]
+        warnings.append(f"'Show the page' was on, but the page is not in this video: {why}.")
+        log('warning: ' + warnings[-1])
     checks = [
         {'label': 'Hook on screen from the first frame', 'ok': first.get('type') == 'coldopen' or (voice_led and bool(sb.get('spoken'))),
          'detail': first.get('text') or (sb.get('spoken') or [{}])[0].get('text', '')},
@@ -211,13 +216,14 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
          'detail': (page_status or ('off', ''))[1] if any(p['type'] == 'scroll' for p in plan) or not page_status or page_status[0] != 'shown'
                    else 'dropped: the video is too short to fit it'},
     ]
-    manifest = {'job': os.path.basename(job), 'dir': job, 'name': sb['name'], 'duration': sb['duration'], 'quality': quality,
+    from . import __version__
+    manifest = {'version': __version__, 'job': os.path.basename(job), 'dir': job, 'name': sb['name'], 'duration': sb['duration'], 'quality': quality,
                 'resolution': (TARGETS[upscale]['size'] if upscale else ((540, 960) if quality == 'draft' else (1080, 1920))),
                 'upscale': upscale, 'upscale_method': upscale_method if upscale else None,
                 'template': sb.get('template'),
                 'voiceover': bool(voiceover), 'voice': (voice or (s_tts or {}).get('voice')) if voiceover else None,
                 'planned_by': how, 'captions_by': c.get('source'), 'seconds': round(time.time() - t0, 1),
-                'files': files, 'covers': covers, 'checks': checks, 'hook': sb.get('hook_line'), 'hook_alternatives': sb.get('hook_alternatives') or []}
+                'files': files, 'covers': covers, 'checks': checks, 'warnings': warnings, 'hook': sb.get('hook_line'), 'hook_alternatives': sb.get('hook_alternatives') or []}
     with open(os.path.join(job, 'manifest.json'), 'w') as f: json.dump(manifest, f, indent=2)
     stage('done', 1)
     log(f"Done in {manifest['seconds']}s → {job}")

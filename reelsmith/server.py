@@ -92,7 +92,8 @@ def make_handler(jobs, port):
             if path in ('/', '/index.html'):
                 return self._send(200, open(os.path.join(WEB, 'index.html'), 'rb').read(), MIME['.html'])
             if path == '/api/status':
-                return self._send(200, {'llm': llm.provider(), 'cpus': os.cpu_count(), 'out': jobs.out, 'in_docker': cfgmod.in_docker(), 'version': __version__})
+                return self._send(200, {'llm': llm.provider(), 'cpus': os.cpu_count(), 'out': jobs.out, 'in_docker': cfgmod.in_docker(), 'version': __version__,
+                                       'screenshots': globals().get('SCREENSHOTS')})
             if path == '/api/tts':
                 return self._send(200, {'config': ttsmod.public(ttsmod.load()), 'presets': ttsmod.PRESETS,
                                         'ready': bool(ttsmod.settings())})
@@ -209,6 +210,10 @@ def serve(host='127.0.0.1', port=5179, out='output'):
     srv = ThreadingHTTPServer((host, port), make_handler(jobs, port))
     p = llm.provider()
     print(f"Reelsmith {__version__} → http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}")
+    from .capture import screenshot_support
+    mode, why = screenshot_support()
+    print(f"  screenshots: {why}" if mode == 'browser' else f"  screenshots: OFF, pages will be drawn from the README ({why})")
+    globals()['SCREENSHOTS'] = {'mode': mode, 'detail': why}
     print(f"  LLM: {p['label'] + ' / ' + (p['model'] or '?') + ' @ ' + p['base_url'] if p else 'none (built-in planner). Open Settings to add one.'}")
     print(f"  output: {jobs.out}   settings: {cfgmod.path()}")
     t = ttsmod.settings()
