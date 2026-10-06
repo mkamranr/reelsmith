@@ -161,6 +161,14 @@
   .jobs { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 18px; }
   .jobs-head { display: flex; align-items: baseline; gap: 10px; }
   .jobs-head span { color: var(--ink-3); font-size: 14px; }
+  .job-item { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: stretch; }
+  .trash { border: 1px solid var(--line); background: var(--well); border-radius: 10px; width: 42px; cursor: pointer; color: var(--ink-3); display: grid; place-items: center; }
+  .trash:hover, .trash:focus-visible { color: var(--bad); border-color: var(--bad); }
+  .trash-wait { font-size: 12.5px; color: var(--ink-3); align-self: center; padding: 0 6px; }
+  .row-confirm { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px solid var(--bad); border-radius: 10px; padding: 9px 12px; background: var(--panel); font-size: 14px; }
+  .row-confirm span { flex: 1; min-width: 160px; }
+  .row-confirm small { color: var(--ink-3); }
+  .row-confirm .btn { padding: 6px 12px; font-size: 13.5px; }
   .jobs-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; max-height: 420px; overflow: auto; }
   .job-row { width: 100%; text-align: left; display: grid; grid-template-columns: 10px 1fr auto; gap: 4px 10px; align-items: center;
              border: 1px solid var(--line); background: var(--well); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
@@ -410,9 +418,8 @@
             <button class="btn" id="job-cancel" type="button">Cancel</button>
             <button class="btn" id="job-retry" type="button">Run again</button>
             <button class="btn danger" id="job-delete" type="button">Delete</button>
-            <span class="confirm" id="job-confirm" hidden>Delete this job?
-              <button class="btn" id="del-keep" type="button">Keep the files</button>
-              <button class="btn danger" id="del-files" type="button">Delete files too</button>
+            <span class="confirm" id="job-confirm" hidden>Delete this video and all its files?
+              <button class="btn danger" id="del-files" type="button">Delete</button>
               <button class="link-btn" id="del-no" type="button" style="color:var(--ink)">Never mind</button></span>
           </div>
           <div class="joberr" id="job-err" hidden></div>
@@ -569,12 +576,16 @@ async function loadJobs() {
   try { list = await api('/api/jobs'); } catch (e) { jobsTimer = setTimeout(loadJobs, 5000); return list; }
   $('jobs-wrap').hidden = !list.length;
   const active = list.filter(j => ['queued', 'running'].includes(j.status)).length;
-  $('jobs-count').textContent = list.length ? `${active ? active + ' in progress, ' : ''}${list.length} total` : '';
-  $('jobs').innerHTML = list.map(j => `<li><button type="button" class="job-row st-${j.status}" data-id="${j.id}" ${j.id === openId ? 'aria-current="true"' : ''}>
+  const used = list.reduce((n, j) => n + (j.bytes || 0), 0);
+  $('jobs-count').textContent = list.length ? `${active ? active + ' in progress, ' : ''}${list.length} total${used ? ', ' + fmtBytes(used) + ' on disk' : ''}` : '';
+  $('jobs').innerHTML = list.map(j => `<li class="job-item" data-id="${j.id}"><button type="button" class="job-row st-${j.status}" data-id="${j.id}" ${j.id === openId ? 'aria-current="true"' : ''}>
       <span class="dot" aria-hidden="true"></span><span class="t">${esc(j.title)}</span><span class="when">${ago(j.created)}</span>
       <span class="m">${esc(statusLine(j))}${optsLine(j) ? ' · ' + esc(optsLine(j)) : ''}</span>
-      ${j.status === 'running' ? `<span class="mini"><i style="width:${Math.round(j.progress * 100)}%"></i></span>` : ''}</button></li>`).join('');
+      ${j.status === 'running' ? `<span class="mini"><i style="width:${Math.round(j.progress * 100)}%"></i></span>` : ''}</button>
+      ${j.delete_requested ? '<span class="trash-wait">Deleting…</span>' :
+        `<button type="button" class="trash" data-id="${j.id}" aria-label="Delete ${esc(j.title)} and its files" title="Delete video and files${j.bytes ? ' (' + fmtBytes(j.bytes) + ')' : ''}">${TRASH}</button>`}</li>`).join('');
   $('jobs').querySelectorAll('.job-row').forEach(b => b.addEventListener('click', () => openJob(b.dataset.id)));
+  $('jobs').querySelectorAll('.trash').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); confirmRowDelete(b.dataset.id, list.find(x => x.id === b.dataset.id)); }));
   jobsTimer = setTimeout(loadJobs, active ? 2000 : 15000);
   return list;
 }
@@ -605,7 +616,7 @@ function renderJob(j) {
   const active = ['queued', 'running'].includes(j.status);
   $('job-cancel').hidden = !active || j.cancel_requested;
   $('job-retry').hidden = active || j.kind === 'imported';
-  $('job-delete').hidden = active;
+  $('job-delete').hidden = !!j.delete_requested;
   $('job-err').hidden = !j.error; $('job-err').textContent = j.error || '';
   const key = j.status + (j.result ? '1' : '0');
   if (j.status === 'done' && j.result) {
@@ -627,14 +638,33 @@ $('job-retry').addEventListener('click', async () => {
 });
 $('job-delete').addEventListener('click', () => { $('job-confirm').hidden = false; $('job-delete').hidden = true; });
 $('del-no').addEventListener('click', () => { $('job-confirm').hidden = true; $('job-delete').hidden = false; });
-async function delJob(files) {
-  try {
-    await api(`/api/jobs/${openId}/delete`, { files }); openId = null; clearInterval(polling);
-    $('job-head').hidden = true; $('status').hidden = true; resetStage('Job deleted'); loadJobs();
-  } catch (e) { $('job-err').hidden = false; $('job-err').textContent = e.message; }
+const TRASH = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+function fmtBytes(n) {
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(n < 10 * 1024 ** 2 ? 1 : 0)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
 }
-$('del-keep').addEventListener('click', () => delJob(false));
-$('del-files').addEventListener('click', () => delJob(true));
+async function deleteJob(id) {
+  const r = await api(`/api/jobs/${id}/delete`, { files: true });
+  if (id === openId && !r.pending) { openId = null; clearInterval(polling); $('job-head').hidden = true; $('status').hidden = true; resetStage(r.bytes ? `Deleted, ${fmtBytes(r.bytes)} freed` : 'Deleted'); }
+  loadJobs();
+  return r;
+}
+function confirmRowDelete(id, j) {
+  const li = $('jobs').querySelector(`li[data-id="${id}"]`); if (!li) return;
+  clearTimeout(jobsTimer);                                   // don't redraw the list under the confirmation
+  const what = j && j.status === 'running' ? 'Stop and delete this video and all its files?' : 'Delete this video and all its files?';
+  li.innerHTML = `<div class="row-confirm" role="alertdialog" aria-label="${what}"><span>${what}${j && j.bytes ? ` <small>${fmtBytes(j.bytes)} freed</small>` : ''}</span>
+    <button type="button" class="btn danger" data-a="yes">Delete</button><button type="button" class="btn" data-a="no">Keep</button></div>`;
+  li.querySelector('[data-a="yes"]').focus();
+  li.querySelector('[data-a="yes"]').addEventListener('click', async () => { try { await deleteJob(id); } catch (e) { alert(e.message); loadJobs(); } });
+  li.querySelector('[data-a="no"]').addEventListener('click', () => loadJobs());
+}
+async function delJob() {
+  try { await deleteJob(openId); }
+  catch (e) { $('job-err').hidden = false; $('job-err').textContent = e.message; }
+}
+$('del-files').addEventListener('click', () => delJob());
 
 function showView(v) {
   if (!current) return;

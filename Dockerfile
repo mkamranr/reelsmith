@@ -27,8 +27,16 @@ COPY examples ./examples
 # skip it; videos then show the README drawn as a page instead.
 ARG WITH_BROWSER=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Debian's package lists are fetched over https here, so a proxy rewriting http traffic can't corrupt them. If the
+# browser install still fails (full disk, very old Docker, no network), the image is built without it: videos then
+# show the README drawn as a page, and each job's checklist says so.
 RUN if [ "$WITH_BROWSER" = "1" ]; then \
-      pip install "playwright>=1.40" && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*; \
+      sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+      pip install "playwright>=1.40" \
+      && (playwright install --with-deps chromium \
+          || (echo "WARNING: headless Chromium could not be installed; screenshots will fall back to README pages." \
+              && echo "         See README > Troubleshooting > 'Docker build: invalid signature'." )) \
+      && rm -rf /var/lib/apt/lists/*; \
     fi
 RUN pip install --no-deps . \
  && python -c "import skia, numpy, scipy; from reelsmith.engine import timeline; print('import ok')"

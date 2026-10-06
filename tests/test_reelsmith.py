@@ -691,5 +691,54 @@ class TestCoversAndPagePacing(unittest.TestCase):
         chk = next(c for c in m['checks'] if c['label'] == 'Page scroll-through')
         self.assertTrue(chk['ok'], chk); self.assertIn('README', chk['detail'])
 
+
+class TestDelete(unittest.TestCase):
+    def _store(self, runner):
+        from reelsmith.jobs import JobStore
+        out = tempfile.mkdtemp()
+        return JobStore(out, runner), out
+
+    def _wait(self, st, jid, done, t=10):
+        import time
+        end = time.time() + t
+        while time.time() < end:
+            if done(st.get(jid)): return
+            time.sleep(0.05)
+        self.fail('timed out')
+
+    def test_finished_failed_queued_and_running_jobs_delete_everything(self):
+        import time, threading
+        gate = threading.Event()
+        def runner(job, hooks):
+            d = os.path.join(st_out[0], 'job-' + job['id']); os.makedirs(d)
+            hooks['dir'](d)                                   # the folder exists before anything can fail
+            with open(os.path.join(d, 'video.mp4'), 'wb') as f: f.write(b'x' * 50_000)
+            mode = job['payload'].get('mode')
+            if mode == 'fail': raise RuntimeError('boom')
+            if mode == 'block':
+                while not hooks['cancelled']():
+                    time.sleep(0.02)
+                from reelsmith.pipeline import Cancelled; raise Cancelled()
+            return {'job': os.path.basename(d), 'dir': d, 'files': {}}, {'name': 'x'}, {}
+        st_out = [None]
+        st, out = self._store(runner); st_out[0] = out
+        ok = st.submit('generate', {'topic': 'ok'}); self._wait(st, ok, lambda j: j['status'] == 'done')
+        bad = st.submit('generate', {'topic': 'bad', 'mode': 'fail'}); self._wait(st, bad, lambda j: j['status'] == 'error')
+        sizes = {j['id']: j['bytes'] for j in st.list()}
+        self.assertGreaterEqual(sizes[ok], 50_000); self.assertGreaterEqual(sizes[bad], 50_000)
+        self.assertGreaterEqual(st.disk_usage(), 100_000)
+        dirs = {jid: st.job_dir(st.get(jid)) for jid in (ok, bad)}
+        r = st.delete(ok); self.assertGreaterEqual(r['bytes'], 50_000); self.assertFalse(os.path.exists(dirs[ok]))
+        st.delete(bad); self.assertFalse(os.path.exists(dirs[bad]))           # failed jobs leave no partial files
+        self.assertIsNone(st.get(ok)); self.assertFalse(os.path.exists(os.path.join(out, '_jobs', ok + '.json')))
+        run = st.submit('generate', {'topic': 'run', 'mode': 'block'}); self._wait(st, run, lambda j: j['status'] == 'running' and j.get('out_dir'))
+        q = st.submit('generate', {'topic': 'queued', 'mode': 'block'})
+        self.assertFalse(st.delete(q)['pending']); self.assertIsNone(st.get(q))  # queued: gone at once, never runs
+        run_dir = st.get(run)['out_dir']
+        self.assertTrue(st.delete(run)['pending'])                                # running: stopped, then removed
+        self._wait(st, run, lambda j: j is None)
+        self.assertFalse(os.path.exists(run_dir))
+        self.assertEqual(sorted(os.listdir(out)), ['_jobs'])                      # nothing left behind
+
 if __name__ == '__main__':
     unittest.main()

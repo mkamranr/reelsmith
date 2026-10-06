@@ -312,8 +312,10 @@ shown at the bottom of the video), choose **Draft preview**
 - **Make video** adds a job to the queue. Keep adding more; they render one after another.
 - **Plan storyboard** shows the plan first. Edit the JSON (any text, scene order, accent), then **Render this storyboard**.
 
-The **Jobs** list shows every job with its status, queue position and progress. Open one to watch it, cancel it, run it
-again, download its files or delete it. Queued jobs carry on after a restart; a job interrupted by a restart can be
+The **Jobs** list shows every job with its status, queue position, progress and size on disk. Open one to watch it,
+cancel it, run it again or download its files. The bin next to each job deletes it with everything it generated (video,
+upscales, covers, voice-over, screenshot, captions), including the partial files of failed or cancelled jobs; deleting a
+queued or running job stops it first. Queued jobs carry on after a restart; a job interrupted by a restart can be
 run again with one click.
 
 ### Command line
@@ -463,6 +465,12 @@ normal behaviour.
 **The page scroll-through shows the README instead of a screenshot.** No browser was found; see
 [Page scroll-through](#page-scroll-through). If the log says "screenshot failed", the page blocked headless browsers or
 took longer than 45 s to load.
+
+**Docker build: "At least one invalid signature was encountered".** Not a signing problem: apt inside the build could
+not read what it downloaded. Most often the disk is full (`df -h`; free space with `docker builder prune -af` and
+`docker image prune -af`, which leave your data volume alone), otherwise a proxy rewriting http traffic or a Docker
+older than 20.10.10. The image still builds without the browser in that case; set `REELSMITH_WITH_BROWSER=0` in `.env`
+to skip it on purpose.
 
 **After updating, nothing changed (Docker).** Rebuild the image: `docker compose up -d --build`. The startup log and
 `/api/status` show the running version.

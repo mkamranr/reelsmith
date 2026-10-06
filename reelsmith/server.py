@@ -37,7 +37,7 @@ def make_runner(out_root):
             inputs, out_root, 'draft' if p.get('quality') == 'draft' else 'final', storyboard=p.get('storyboard'),
             use_llm=not p.get('no_llm'), upscale=p.get('upscale') or None, upscale_method=p.get('upscale_method') or 'ffmpeg',
             voiceover=bool(p.get('voiceover')), voice=p.get('voice') or None,
-            log=hooks['log'], progress=hooks['progress'], cancel=hooks['cancelled'])
+            log=hooks['log'], progress=hooks['progress'], cancel=hooks['cancelled'], on_dir=hooks['dir'])
     return run
 
 
@@ -111,6 +111,8 @@ def make_handler(jobs, port):
                 self.end_headers(); self.wfile.write(data); return
             if path == '/api/jobs':
                 return self._send(200, jobs.list())
+            if path == '/api/storage':
+                return self._send(200, {'bytes': jobs.disk_usage()})
             if path == '/api/history':
                 return self._send(200, [j for j in jobs.list() if j['status'] == 'done'])
             if path.startswith('/api/jobs/'):
@@ -183,7 +185,7 @@ def make_handler(jobs, port):
                         if action == 'cancel': return self._send(200, jobs.cancel(jid))
                         if action == 'retry': return self._send(200, {'id': jobs.retry(jid)})
                         if action == 'delete':
-                            jobs.delete(jid, files=bool(p.get('files'))); return self._send(200, {'deleted': jid})
+                            return self._send(200, jobs.delete(jid, files=p.get('files', True) is not False))
                     except KeyError:
                         return self._send(404, {'error': 'No such job.'})
                 if path == '/api/plan':

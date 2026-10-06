@@ -15,7 +15,7 @@ import traceback
 import uuid
 
 ACTIVE = ('queued', 'running')
-SUMMARY_KEYS = ('id', 'kind', 'title', 'status', 'stage', 'progress', 'created', 'started', 'finished', 'error',
+SUMMARY_KEYS = ('id', 'kind', 'title', 'status', 'stage', 'progress', 'created', 'started', 'finished', 'error', 'bytes', 'delete_requested',
                 'options', 'retry_of', 'cancel_requested')
 
 
@@ -97,6 +97,23 @@ class JobStore:
             self.jobs[j['id']] = j; self._write(j); self.wake.notify_all()
         return j['id']
 
+    def job_dir(self, j):
+        """The job's output folder, if it is safely inside the output root."""
+        d = j.get('out_dir') or ((j.get('result') or {}).get('manifest') or {}).get('dir') or ''
+        if not d: return ''
+        d = os.path.realpath(os.path.join(self.out, os.path.basename(d.rstrip('/'))))
+        return d if d.startswith(self.out + os.sep) and os.path.basename(d) not in ('', '_jobs', '_previews') else ''
+
+    def _size(self, j):
+        d = self.job_dir(j)
+        if not d or not os.path.isdir(d): return 0
+        total = 0
+        for root, _, files in os.walk(d):
+            for f in files:
+                try: total += os.path.getsize(os.path.join(root, f))
+                except OSError: pass
+        return total
+
     def summary(self, j):
         out = {k: j.get(k) for k in SUMMARY_KEYS}
         r = j.get('result') or {}
@@ -109,7 +126,14 @@ class JobStore:
 
     def list(self):
         with self.lock:
+            for j in self.jobs.values():                      # sizes for finished jobs, measured once
+                if j['status'] not in ACTIVE and j.get('bytes') is None:
+                    j['bytes'] = self._size(j); self._write(j)
             return [self.summary(j) for j in sorted(self.jobs.values(), key=lambda j: -j['created'])]
+
+    def disk_usage(self):
+        with self.lock:
+            return sum(j.get('bytes') or 0 for j in self.jobs.values())
 
     def get(self, jid):
         with self.lock:
@@ -144,18 +168,29 @@ class JobStore:
             payload = json.loads(json.dumps(j['payload'])); payload['_retry_of'] = jid
             return self.submit(j['kind'], payload)
 
-    def delete(self, jid, files=False):
+    def delete(self, jid, files=True):
+        """Remove a job and (by default) everything generated for it. A queued job is cancelled and removed at once;
+        a running one is stopped and removed as soon as it has stopped. Returns {'deleted', 'bytes', 'pending'}."""
         with self.lock:
             j = self.jobs.get(jid)
             if not j: raise KeyError(jid)
-            if j['status'] in ACTIVE: raise ValueError('Cancel the job before deleting it.')
-            if files:
-                d = ((j.get('result') or {}).get('manifest') or {}).get('dir') or ''
-                d = os.path.realpath(os.path.join(self.out, os.path.basename(d.rstrip('/')))) if d else ''
-                if d and d.startswith(self.out + os.sep) and os.path.isdir(d): shutil.rmtree(d, ignore_errors=True)
-            self.jobs.pop(jid, None)
-            try: os.remove(self._file(jid))
-            except FileNotFoundError: pass
+            if j['status'] == 'running':
+                j.update(cancel_requested=True, delete_requested=True, delete_files=bool(files))
+                j['log'].append('Delete requested: stopping…'); self._write(j)
+                return {'deleted': jid, 'bytes': 0, 'pending': True}
+            return {'deleted': jid, 'bytes': self._remove(j, files), 'pending': False}
+
+    def _remove(self, j, files):
+        freed = 0
+        if files:
+            d = self.job_dir(j)
+            if d and os.path.isdir(d):
+                freed = self._size(j)
+                shutil.rmtree(d, ignore_errors=True)
+        self.jobs.pop(j['id'], None)
+        try: os.remove(self._file(j['id']))
+        except FileNotFoundError: pass
+        return freed
 
     # ---------------------------------------------------------------- worker
     def _next(self):
@@ -181,20 +216,29 @@ class JobStore:
                     jj = self.jobs.get(jid)
                     if jj: jj.update(stage=stage, progress=round(float(frac), 3)); self._write(jj, force=False)
 
+            def set_dir(path, jid=jid):
+                with self.lock:
+                    jj = self.jobs.get(jid)
+                    if jj: jj['out_dir'] = path; self._write(jj)
+
             def cancelled(jid=jid):
                 with self.lock:
                     jj = self.jobs.get(jid); return bool(jj and jj.get('cancel_requested'))
 
             try:
-                manifest, sb, caps = self.runner(j, {'log': log, 'progress': progress, 'cancelled': cancelled})
+                manifest, sb, caps = self.runner(j, {'log': log, 'progress': progress, 'cancelled': cancelled, 'dir': set_dir})
                 res = self._result(manifest, manifest['job'], sb, caps)
                 with self.lock:
-                    j.update(status='done', stage='done', progress=1.0, finished=time.time(), result=res,
+                    if j.get('delete_requested'):                    # deleted while it was finishing
+                        self._remove(j, j.get('delete_files', True)); continue
+                    j.update(status='done', stage='done', progress=1.0, finished=time.time(), result=res, bytes=None,
                              options={**j['options'], 'resolution': manifest.get('resolution')})
                     self._write(j)
             except Exception as e:
                 was_cancel = type(e).__name__ == 'Cancelled' or cancelled()
                 with self.lock:
+                    if j.get('delete_requested'):
+                        self._remove(j, j.get('delete_files', True)); continue
                     if was_cancel:
                         j.update(status='cancelled', stage='cancelled', finished=time.time())
                         j['log'].append('Cancelled.')

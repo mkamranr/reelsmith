@@ -25,7 +25,7 @@ def slug(s):
 
 
 def generate(inputs, out_root='output', quality='final', workers=None, storyboard=None, use_llm=True, log=print, progress=None,
-             upscale=None, upscale_method='ffmpeg', voiceover=False, voice=None, cancel=None):
+             upscale=None, upscale_method='ffmpeg', voiceover=False, voice=None, cancel=None, on_dir=None):
     """
     inputs: {topic, description, url, duration, accent, handle}
     storyboard: optional pre-made storyboard dict (skips planning, e.g. after editing).
@@ -78,6 +78,7 @@ def generate(inputs, out_root='output', quality='final', workers=None, storyboar
 
     job = os.path.join(out_root, f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(sb['name'])}")
     os.makedirs(job, exist_ok=True)
+    if on_dir: on_dir(job)
     if source:
         with open(os.path.join(job, 'source.json'), 'w') as f: json.dump(source, f, indent=2, ensure_ascii=False)
 
